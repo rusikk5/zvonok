@@ -1,6 +1,6 @@
 {
   "name": "zvonok",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Голосовое приложение для своих",
   "main": "electron.js",
   "scripts": {
@@ -33,6 +33,7 @@
   "build": {
     "appId": "com.zvonok.app",
     "productName": "Звонок",
+    "executableName": "Zvonok",
     "asar": false,
     "icon": "build/icon.ico",
     "publish": {
