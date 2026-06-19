@@ -683,6 +683,7 @@ async function joinVoice() {
   if (!S.roomId) return;
   try {
     await S.voice.join(S.roomId);
+    playJoinSound();
     $('btn-voice').textContent = 'Выйти';
     $('btn-voice').classList.add('in-voice');
     $('voice-status').classList.remove('hidden');
@@ -701,6 +702,7 @@ async function joinVoice() {
 }
 
 function leaveVoice() {
+  playLeaveSound();
   S.voice.leave();
   S.voiceUsers.clear();
   S.voiceRoom = S.voiceRoom.filter(id => id !== S.me.id);
@@ -767,12 +769,14 @@ function renderVoiceCard() {
   if (!wrap) return;
   if (S.voiceRoom.length === 0) {
     wrap.style.display = 'none';
+    $('vch-empty-row').style.display = '';
     if (!_vcTimerRunning) stopVoiceTimer();
     return;
   }
   wrap.style.display = '';
+  $('vch-empty-row').style.display = 'none';
   const nameEl = $('vac-name');
-  if (nameEl && S.room) nameEl.textContent = S.room.name;
+  if (nameEl) nameEl.textContent = 'Поговорите тут';
 
   const list = $('vac-list');
   if (!list) return;
