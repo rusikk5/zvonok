@@ -88,11 +88,13 @@ function avatarHTML(user, size = 36) {
   const name   = user.name || user.username || '?';
   const letter = name.charAt(0).toUpperCase();
   const fs     = Math.floor(size / 3);
+  const bg     = strColor(user.username || user.id);
+  const fallback = `this.outerHTML='<div class="def-ava" style="background:${bg};font-size:${fs}px">${letter}</div>'`;
   if (user.avatar && user.avatar !== 'default') {
     const src = user.avatar + (user.avatar.startsWith('/uploads/') ? `?v=${Date.now()}` : '');
-    return `<img src="${src}" alt="${letter}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    return `<img src="${src}" alt="${letter}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="${fallback}">`;
   }
-  return `<div class="def-ava" style="background:${strColor(user.username||user.id)};font-size:${fs}px">${letter}</div>`;
+  return `<div class="def-ava" style="background:${bg};font-size:${fs}px">${letter}</div>`;
 }
 
 function onlineDot(userId) {
@@ -121,13 +123,28 @@ function escHtml(s) {
 }
 
 // ── Voice sounds ──────────────────────────────────────────────
-function playJoinSound() {
-  try { new Audio('/sounds/join.wav').play(); } catch {}
+const _audioBufs = {};
+async function _loadSnd(name) {
+  if (_audioBufs[name]) return _audioBufs[name];
+  const r = await fetch(`/sounds/${name}.wav`);
+  const buf = await r.arrayBuffer();
+  const ctx = new AudioContext();
+  _audioBufs[name] = await ctx.decodeAudioData(buf);
+  await ctx.close();
+  return _audioBufs[name];
 }
-
-function playLeaveSound() {
-  try { new Audio('/sounds/leave.wav').play(); } catch {}
+function _playSnd(name) {
+  _loadSnd(name).then(buf => {
+    const ctx = new AudioContext();
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start();
+    src.onended = () => ctx.close();
+  }).catch(() => {});
 }
+function playJoinSound()  { _playSnd('join');  }
+function playLeaveSound() { _playSnd('leave'); }
 
 function playRingSound() {
   try {
