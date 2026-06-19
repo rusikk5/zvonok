@@ -36,7 +36,6 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 
 let server, io;
 if (IS_PROD) {
-  // Railway/Render/VPS — SSL terminated by the platform
   server = http.createServer(app);
   io     = new Server(server, { cors: { origin: '*' } });
 } else {
@@ -153,13 +152,17 @@ const auth = (req, res, next) => {
   catch { res.status(401).json({ error: 'Не авторизован' }); }
 };
 
-const getUser = id => db.prepare('SELECT id,username,name,avatar,name_color,bio FROM users WHERE id=?').get(id);
+async function getUser(id) {
+  return db.get('SELECT id,username,name,avatar,name_color,bio FROM users WHERE id=?', [id]);
+}
 
-const isMember = (roomId, userId) =>
-  !!db.prepare('SELECT 1 FROM members WHERE room_id=? AND user_id=?').get(roomId, userId);
+async function isMember(roomId, userId) {
+  return !!(await db.get('SELECT 1 FROM members WHERE room_id=? AND user_id=?', [roomId, userId]));
+}
 
-const isBlocked = (a, b) =>
-  !!db.prepare('SELECT 1 FROM blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)').get(a, b, b, a);
+async function isBlocked(a, b) {
+  return !!(await db.get('SELECT 1 FROM blocks WHERE (blocker_id=? AND blocked_id=?) OR (blocker_id=? AND blocked_id=?)', [a, b, b, a]));
+}
 
 // ── Email reset helper ─────────────────────────────────────────────
 async function sendResetEmail(email, resetUrl) {
@@ -236,273 +239,341 @@ const upload = multer({
 // ═══════════════════════════════════════════════════════════════════
 
 // ── Auth ───────────────────────────────────────────────────────────
-app.post('/api/register', limitAuth, (req, res) => {
-  const { username, password, name, email } = req.body || {};
-  if (!username?.trim() || !password || !name?.trim())
-    return res.status(400).json({ error: 'Заполни все поля' });
-  if (username.trim().length < 3 || username.trim().length > 32)
-    return res.status(400).json({ error: 'Логин — от 3 до 32 символов' });
-  if (!/^[a-z0-9_]+$/i.test(username.trim()))
-    return res.status(400).json({ error: 'Логин — только буквы, цифры и _' });
-  if (name.trim().length > 64)
-    return res.status(400).json({ error: 'Имя — максимум 64 символа' });
-  if (password.length < 4 || password.length > 128)
-    return res.status(400).json({ error: 'Пароль — от 4 до 128 символов' });
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-    return res.status(400).json({ error: 'Некорректный email' });
-  const uname = username.trim().toLowerCase();
-  if (db.prepare('SELECT 1 FROM users WHERE username=?').get(uname))
-    return res.status(400).json({ error: 'Логин уже занят' });
-  if (email && db.prepare('SELECT 1 FROM users WHERE email=?').get(email.toLowerCase()))
-    return res.status(400).json({ error: 'Email уже используется' });
-  const id = uuid();
-  db.prepare('INSERT INTO users (id,username,pass_hash,name,avatar,email,created_at) VALUES(?,?,?,?,?,?,?)').run(
-    id, uname, bcrypt.hashSync(password, 10), name.trim(), 'default', email ? email.toLowerCase() : null, Date.now()
-  );
-  const token = jwt.sign({ id, username: uname }, SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id, username: uname, name: name.trim(), avatar: 'default' } });
+app.post('/api/register', limitAuth, async (req, res) => {
+  try {
+    const { username, password, name, email } = req.body || {};
+    if (!username?.trim() || !password || !name?.trim())
+      return res.status(400).json({ error: 'Заполни все поля' });
+    if (username.trim().length < 3 || username.trim().length > 32)
+      return res.status(400).json({ error: 'Логин — от 3 до 32 символов' });
+    if (!/^[a-z0-9_]+$/i.test(username.trim()))
+      return res.status(400).json({ error: 'Логин — только буквы, цифры и _' });
+    if (name.trim().length > 64)
+      return res.status(400).json({ error: 'Имя — максимум 64 символа' });
+    if (password.length < 4 || password.length > 128)
+      return res.status(400).json({ error: 'Пароль — от 4 до 128 символов' });
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      return res.status(400).json({ error: 'Некорректный email' });
+    const uname = username.trim().toLowerCase();
+    if (await db.get('SELECT 1 FROM users WHERE username=?', [uname]))
+      return res.status(400).json({ error: 'Логин уже занят' });
+    if (email && await db.get('SELECT 1 FROM users WHERE email=?', [email.toLowerCase()]))
+      return res.status(400).json({ error: 'Email уже используется' });
+    const id = uuid();
+    await db.run(
+      'INSERT INTO users (id,username,pass_hash,name,avatar,email,created_at) VALUES(?,?,?,?,?,?,?)',
+      [id, uname, bcrypt.hashSync(password, 10), name.trim(), 'default', email ? email.toLowerCase() : null, Date.now()]
+    );
+    const token = jwt.sign({ id, username: uname }, SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id, username: uname, name: name.trim(), avatar: 'default' } });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/login', limitAuth, (req, res) => {
-  const { username, password } = req.body || {};
-  const login = (username || '').toLowerCase().trim();
-  // Allow login with username OR email
-  const u = db.prepare('SELECT * FROM users WHERE username=? OR email=?').get(login, login);
-  if (!u || !bcrypt.compareSync(password || '', u.pass_hash))
-    return res.status(400).json({ error: 'Неверный логин или пароль' });
-  const token = jwt.sign({ id: u.id, username: u.username }, SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: u.id, username: u.username, name: u.name, avatar: u.avatar } });
+app.post('/api/login', limitAuth, async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    const login = (username || '').toLowerCase().trim();
+    const u = await db.get('SELECT * FROM users WHERE username=? OR email=?', [login, login]);
+    if (!u || !bcrypt.compareSync(password || '', u.pass_hash))
+      return res.status(400).json({ error: 'Неверный логин или пароль' });
+    const token = jwt.sign({ id: u.id, username: u.username }, SECRET, { expiresIn: '30d' });
+    res.json({ token, user: { id: u.id, username: u.username, name: u.name, avatar: u.avatar } });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── Password reset ─────────────────────────────────────────────────
 app.post('/api/reset-request', limitAuth, async (req, res) => {
-  const { email } = req.body || {};
-  if (!email) return res.status(400).json({ error: 'Введи email' });
-  const u = db.prepare('SELECT id,email FROM users WHERE email=?').get(email.toLowerCase().trim());
-  if (!u) return res.json({ ok: true, info: 'Если такой email зарегистрирован, ссылка отправлена.' });
+  try {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'Введи email' });
+    const u = await db.get('SELECT id,email FROM users WHERE email=?', [email.toLowerCase().trim()]);
+    if (!u) return res.json({ ok: true, info: 'Если такой email зарегистрирован, ссылка отправлена.' });
 
-  const token = crypto.randomBytes(32).toString('hex');
-  const expires = Date.now() + 60 * 60 * 1000; // 1 час
-  db.prepare('DELETE FROM password_resets WHERE user_id=?').run(u.id);
-  db.prepare('INSERT INTO password_resets VALUES(?,?,?)').run(token, u.id, expires);
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = Date.now() + 60 * 60 * 1000;
+    await db.run('DELETE FROM password_resets WHERE user_id=?', [u.id]);
+    await db.run('INSERT INTO password_resets VALUES(?,?,?)', [token, u.id, expires]);
 
-  const host = req.headers.host || `localhost:${PORT}`;
-  const resetUrl = `https://${host}/reset.html?token=${token}`;
+    const host = req.headers.host || `localhost:${PORT}`;
+    const resetUrl = `https://${host}/reset.html?token=${token}`;
 
-  let emailSent = false;
-  try { emailSent = await sendResetEmail(email, resetUrl); } catch {}
+    let emailSent = false;
+    try { emailSent = await sendResetEmail(email, resetUrl); } catch {}
 
-  if (emailSent) {
-    res.json({ ok: true, info: 'Ссылка отправлена на почту.' });
-  } else {
-    // Fallback: return link directly (local app)
-    console.log('\n  🔑 Ссылка для сброса пароля:', resetUrl, '\n');
-    res.json({ ok: true, resetUrl, info: 'Email не настроен — ссылка выше.' });
-  }
+    if (emailSent) {
+      res.json({ ok: true, info: 'Ссылка отправлена на почту.' });
+    } else {
+      console.log('\n  🔑 Ссылка для сброса пароля:', resetUrl, '\n');
+      res.json({ ok: true, resetUrl, info: 'Email не настроен — ссылка выше.' });
+    }
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/reset-password', (req, res) => {
-  const { token, password } = req.body || {};
-  if (!token || !password) return res.status(400).json({ error: 'Недостаточно данных' });
-  if (password.length < 4 || password.length > 128)
-    return res.status(400).json({ error: 'Пароль — от 4 до 128 символов' });
-  const row = db.prepare('SELECT * FROM password_resets WHERE token=?').get(token);
-  if (!row) return res.status(400).json({ error: 'Ссылка недействительна' });
-  if (Date.now() > row.expires_at) {
-    db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
-    return res.status(400).json({ error: 'Ссылка истекла' });
-  }
-  db.prepare('UPDATE users SET pass_hash=? WHERE id=?').run(bcrypt.hashSync(password, 10), row.user_id);
-  db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
-  res.json({ ok: true });
+app.post('/api/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!token || !password) return res.status(400).json({ error: 'Недостаточно данных' });
+    if (password.length < 4 || password.length > 128)
+      return res.status(400).json({ error: 'Пароль — от 4 до 128 символов' });
+    const row = await db.get('SELECT * FROM password_resets WHERE token=?', [token]);
+    if (!row) return res.status(400).json({ error: 'Ссылка недействительна' });
+    if (Date.now() > row.expires_at) {
+      await db.run('DELETE FROM password_resets WHERE token=?', [token]);
+      return res.status(400).json({ error: 'Ссылка истекла' });
+    }
+    await db.run('UPDATE users SET pass_hash=? WHERE id=?', [bcrypt.hashSync(password, 10), row.user_id]);
+    await db.run('DELETE FROM password_resets WHERE token=?', [token]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── Me ─────────────────────────────────────────────────────────────
-app.get('/api/me', auth, (req, res) => res.json(getUser(req.user.id)));
-
-app.patch('/api/me', auth, (req, res) => {
-  const { name, name_color, bio } = req.body || {};
-  if (name?.trim()) {
-    db.prepare('UPDATE users SET name=? WHERE id=?').run(name.trim(), req.user.id);
-    io.emit('user:update', { id: req.user.id, name: name.trim() });
-  }
-  if (name_color !== undefined) {
-    db.prepare('UPDATE users SET name_color=? WHERE id=?').run(name_color || null, req.user.id);
-    io.emit('user:update', { id: req.user.id, name_color: name_color || null });
-  }
-  if (bio !== undefined) {
-    db.prepare('UPDATE users SET bio=? WHERE id=?').run(bio || '', req.user.id);
-  }
-  res.json(getUser(req.user.id));
+app.get('/api/me', auth, async (req, res) => {
+  try { res.json(await getUser(req.user.id)); }
+  catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/me/avatar', auth, upload.single('avatar'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Нет файла' });
-  const avatar = '/uploads/' + req.file.filename;
-  db.prepare('UPDATE users SET avatar=? WHERE id=?').run(avatar, req.user.id);
-  io.emit('user:update', { id: req.user.id, avatar });
-  res.json({ avatar });
+app.patch('/api/me', auth, async (req, res) => {
+  try {
+    const { name, name_color, bio } = req.body || {};
+    if (name?.trim()) {
+      await db.run('UPDATE users SET name=? WHERE id=?', [name.trim(), req.user.id]);
+      io.emit('user:update', { id: req.user.id, name: name.trim() });
+    }
+    if (name_color !== undefined) {
+      await db.run('UPDATE users SET name_color=? WHERE id=?', [name_color || null, req.user.id]);
+      io.emit('user:update', { id: req.user.id, name_color: name_color || null });
+    }
+    if (bio !== undefined) {
+      await db.run('UPDATE users SET bio=? WHERE id=?', [bio || '', req.user.id]);
+    }
+    res.json(await getUser(req.user.id));
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
+});
+
+app.post('/api/me/avatar', auth, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Нет файла' });
+    const avatar = '/uploads/' + req.file.filename;
+    await db.run('UPDATE users SET avatar=? WHERE id=?', [avatar, req.user.id]);
+    io.emit('user:update', { id: req.user.id, avatar });
+    res.json({ avatar });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── Users (search + profile) ───────────────────────────────────────
-app.get('/api/users/search', auth, (req, res) => {
-  const q = (req.query.q || '').toLowerCase().trim();
-  if (q.length < 2) return res.json([]);
-  const users = db.prepare('SELECT id,username,name,avatar,name_color,bio FROM users WHERE username LIKE ? AND id!=? LIMIT 8').all(`%${q}%`, req.user.id);
-  res.json(users);
+app.get('/api/users/search', auth, async (req, res) => {
+  try {
+    const q = (req.query.q || '').toLowerCase().trim();
+    if (q.length < 2) return res.json([]);
+    const users = await db.all(
+      'SELECT id,username,name,avatar,name_color,bio FROM users WHERE username LIKE ? AND id!=? LIMIT 8',
+      [`%${q}%`, req.user.id]
+    );
+    res.json(users);
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.get('/api/users/:id', auth, (req, res) => {
-  const u = getUser(req.params.id);
-  if (!u) return res.status(404).json({ error: 'Не найден' });
-  // Include friend status
-  const friendRow = db.prepare('SELECT status,from_id FROM friends WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)').get(req.user.id, req.params.id, req.params.id, req.user.id);
-  const blocked = isBlocked(req.user.id, req.params.id);
-  let friendStatus = 'none';
-  if (friendRow) {
-    if (friendRow.status === 'accepted') friendStatus = 'friends';
-    else if (friendRow.from_id === req.user.id) friendStatus = 'sent';
-    else friendStatus = 'received';
-  }
-  res.json({ ...u, friendStatus, blocked });
+app.get('/api/users/:id', auth, async (req, res) => {
+  try {
+    const u = await getUser(req.params.id);
+    if (!u) return res.status(404).json({ error: 'Не найден' });
+    const friendRow = await db.get(
+      'SELECT status,from_id FROM friends WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)',
+      [req.user.id, req.params.id, req.params.id, req.user.id]
+    );
+    const blocked = await isBlocked(req.user.id, req.params.id);
+    let friendStatus = 'none';
+    if (friendRow) {
+      if (friendRow.status === 'accepted') friendStatus = 'friends';
+      else if (friendRow.from_id === req.user.id) friendStatus = 'sent';
+      else friendStatus = 'received';
+    }
+    res.json({ ...u, friendStatus, blocked });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── Rooms ──────────────────────────────────────────────────────────
-app.get('/api/rooms', auth, (req, res) => {
-  const rows = db.prepare(`SELECT r.* FROM rooms r JOIN members m ON r.id=m.room_id WHERE m.user_id=? ORDER BY r.created_at`).all(req.user.id);
-  res.json(rows);
+app.get('/api/rooms', auth, async (req, res) => {
+  try {
+    const rows = await db.all(
+      'SELECT r.* FROM rooms r JOIN members m ON r.id=m.room_id WHERE m.user_id=? ORDER BY r.created_at',
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/rooms', auth, (req, res) => {
-  const { name } = req.body || {};
-  if (!name?.trim()) return res.status(400).json({ error: 'Нужно название' });
-  if (name.trim().length > 64) return res.status(400).json({ error: 'Название — максимум 64 символа' });
-  const id     = uuid();
-  const invite = crypto.randomBytes(4).toString('hex').toUpperCase();
-  db.prepare('INSERT INTO rooms VALUES(?,?,?,?,?)').run(id, name.trim(), req.user.id, invite, Date.now());
-  db.prepare('INSERT INTO members VALUES(?,?,?)').run(id, req.user.id, Date.now());
-  res.json(db.prepare('SELECT * FROM rooms WHERE id=?').get(id));
+app.post('/api/rooms', auth, async (req, res) => {
+  try {
+    const { name } = req.body || {};
+    if (!name?.trim()) return res.status(400).json({ error: 'Нужно название' });
+    if (name.trim().length > 64) return res.status(400).json({ error: 'Название — максимум 64 символа' });
+    const id     = uuid();
+    const invite = crypto.randomBytes(4).toString('hex').toUpperCase();
+    await db.run('INSERT INTO rooms VALUES(?,?,?,?,?)', [id, name.trim(), req.user.id, invite, Date.now()]);
+    await db.run('INSERT INTO members VALUES(?,?,?)', [id, req.user.id, Date.now()]);
+    res.json(await db.get('SELECT * FROM rooms WHERE id=?', [id]));
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/rooms/join', auth, (req, res) => {
-  const { invite } = req.body || {};
-  const room = db.prepare('SELECT * FROM rooms WHERE invite=?').get((invite || '').toUpperCase().trim());
-  if (!room) return res.status(404).json({ error: 'Комната не найдена' });
-  db.prepare('INSERT OR IGNORE INTO members VALUES(?,?,?)').run(room.id, req.user.id, Date.now());
-  const joinUser = getUser(req.user.id);
-  io.to(`room:${room.id}`).emit('room:joined', { roomId: room.id, user: joinUser });
-  io.to(`room:${room.id}`).emit('sys:msg', { roomId: room.id, text: `${joinUser.name || joinUser.username} присоединился к серверу` });
-  res.json(room);
+app.post('/api/rooms/join', auth, async (req, res) => {
+  try {
+    const { invite } = req.body || {};
+    const room = await db.get('SELECT * FROM rooms WHERE invite=?', [(invite || '').toUpperCase().trim()]);
+    if (!room) return res.status(404).json({ error: 'Комната не найдена' });
+    await db.run('INSERT OR IGNORE INTO members VALUES(?,?,?)', [room.id, req.user.id, Date.now()]);
+    const joinUser = await getUser(req.user.id);
+    io.to(`room:${room.id}`).emit('room:joined', { roomId: room.id, user: joinUser });
+    io.to(`room:${room.id}`).emit('sys:msg', { roomId: room.id, text: `${joinUser.name || joinUser.username} присоединился к серверу` });
+    res.json(room);
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.get('/api/rooms/:id/messages', auth, (req, res) => {
-  if (!isMember(req.params.id, req.user.id))
-    return res.status(403).json({ error: 'Не участник' });
-  const rows = db.prepare(`SELECT m.*, u.name, u.avatar, u.username, u.name_color FROM messages m JOIN users u ON m.user_id=u.id WHERE m.room_id=? ORDER BY m.ts LIMIT 200`).all(req.params.id);
-  res.json(rows);
+app.get('/api/rooms/:id/messages', auth, async (req, res) => {
+  try {
+    if (!await isMember(req.params.id, req.user.id))
+      return res.status(403).json({ error: 'Не участник' });
+    const rows = await db.all(
+      'SELECT m.*, u.name, u.avatar, u.username, u.name_color FROM messages m JOIN users u ON m.user_id=u.id WHERE m.room_id=? ORDER BY m.ts LIMIT 200',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.get('/api/rooms/:id/members', auth, (req, res) => {
-  if (!isMember(req.params.id, req.user.id))
-    return res.status(403).json({ error: 'Не участник' });
-  const rows = db.prepare(`SELECT u.id, u.username, u.name, u.avatar, u.name_color FROM members mb JOIN users u ON mb.user_id=u.id WHERE mb.room_id=?`).all(req.params.id);
-  res.json(rows);
+app.get('/api/rooms/:id/members', auth, async (req, res) => {
+  try {
+    if (!await isMember(req.params.id, req.user.id))
+      return res.status(403).json({ error: 'Не участник' });
+    const rows = await db.all(
+      'SELECT u.id, u.username, u.name, u.avatar, u.name_color FROM members mb JOIN users u ON mb.user_id=u.id WHERE mb.room_id=?',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.delete('/api/rooms/:id/leave', auth, (req, res) => {
-  db.prepare('DELETE FROM members WHERE room_id=? AND user_id=?').run(req.params.id, req.user.id);
-  io.to(`room:${req.params.id}`).emit('room:left', { roomId: req.params.id, userId: req.user.id });
-  res.json({ ok: true });
+app.delete('/api/rooms/:id/leave', auth, async (req, res) => {
+  try {
+    await db.run('DELETE FROM members WHERE room_id=? AND user_id=?', [req.params.id, req.user.id]);
+    io.to(`room:${req.params.id}`).emit('room:left', { roomId: req.params.id, userId: req.user.id });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── Friends ────────────────────────────────────────────────────────
-app.get('/api/friends', auth, (req, res) => {
-  const friends = db.prepare(`
-    SELECT u.id,u.username,u.name,u.avatar,u.name_color FROM friends f
-    JOIN users u ON f.to_id=u.id WHERE f.from_id=? AND f.status='accepted'
-    UNION
-    SELECT u.id,u.username,u.name,u.avatar,u.name_color FROM friends f
-    JOIN users u ON f.from_id=u.id WHERE f.to_id=? AND f.status='accepted'
-  `).all(req.user.id, req.user.id);
-  const pending = db.prepare(`
-    SELECT u.id,u.username,u.name,u.avatar,u.name_color FROM friends f
-    JOIN users u ON f.from_id=u.id WHERE f.to_id=? AND f.status='pending'
-  `).all(req.user.id);
-  res.json({ friends, pending });
+app.get('/api/friends', auth, async (req, res) => {
+  try {
+    const friends = await db.all(`
+      SELECT u.id,u.username,u.name,u.avatar,u.name_color FROM friends f
+      JOIN users u ON f.to_id=u.id WHERE f.from_id=? AND f.status='accepted'
+      UNION
+      SELECT u.id,u.username,u.name,u.avatar,u.name_color FROM friends f
+      JOIN users u ON f.from_id=u.id WHERE f.to_id=? AND f.status='accepted'
+    `, [req.user.id, req.user.id]);
+    const pending = await db.all(`
+      SELECT u.id,u.username,u.name,u.avatar,u.name_color FROM friends f
+      JOIN users u ON f.from_id=u.id WHERE f.to_id=? AND f.status='pending'
+    `, [req.user.id]);
+    res.json({ friends, pending });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/friends/add', auth, (req, res) => {
-  const { username } = req.body || {};
-  const target = db.prepare('SELECT id,username,name,avatar FROM users WHERE username=?').get((username||'').toLowerCase().trim());
-  if (!target)            return res.status(404).json({ error: 'Пользователь не найден' });
-  if (target.id === req.user.id) return res.status(400).json({ error: 'Нельзя добавить себя' });
-  if (isBlocked(req.user.id, target.id)) return res.status(400).json({ error: 'Пользователь заблокирован' });
-  const exists = db.prepare('SELECT 1 FROM friends WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)').get(req.user.id, target.id, target.id, req.user.id);
-  if (exists) return res.status(400).json({ error: 'Заявка уже отправлена или вы уже друзья' });
-  db.prepare('INSERT INTO friends VALUES(?,?,?,?)').run(req.user.id, target.id, 'pending', Date.now());
-  const sock = onlineUsers.get(target.id);
-  if (sock) io.to(sock).emit('friend:request', getUser(req.user.id));
-  res.json({ ok: true });
+app.post('/api/friends/add', auth, async (req, res) => {
+  try {
+    const { username } = req.body || {};
+    const target = await db.get(
+      'SELECT id,username,name,avatar FROM users WHERE username=?',
+      [(username || '').toLowerCase().trim()]
+    );
+    if (!target)            return res.status(404).json({ error: 'Пользователь не найден' });
+    if (target.id === req.user.id) return res.status(400).json({ error: 'Нельзя добавить себя' });
+    if (await isBlocked(req.user.id, target.id)) return res.status(400).json({ error: 'Пользователь заблокирован' });
+    const exists = await db.get(
+      'SELECT 1 FROM friends WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)',
+      [req.user.id, target.id, target.id, req.user.id]
+    );
+    if (exists) return res.status(400).json({ error: 'Заявка уже отправлена или вы уже друзья' });
+    await db.run('INSERT INTO friends VALUES(?,?,?,?)', [req.user.id, target.id, 'pending', Date.now()]);
+    const sock = onlineUsers.get(target.id);
+    if (sock) io.to(sock).emit('friend:request', await getUser(req.user.id));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/friends/accept', auth, (req, res) => {
-  const { fromId } = req.body || {};
-  const r = db.prepare(`UPDATE friends SET status='accepted' WHERE from_id=? AND to_id=?`).run(fromId, req.user.id);
-  if (!r.changes) return res.status(404).json({ error: 'Заявка не найдена' });
-  const sock = onlineUsers.get(fromId);
-  if (sock) io.to(sock).emit('friend:accepted', getUser(req.user.id));
-  res.json({ ok: true });
+app.post('/api/friends/accept', auth, async (req, res) => {
+  try {
+    const { fromId } = req.body || {};
+    const r = await db.run(`UPDATE friends SET status='accepted' WHERE from_id=? AND to_id=?`, [fromId, req.user.id]);
+    if (!r.changes) return res.status(404).json({ error: 'Заявка не найдена' });
+    const sock = onlineUsers.get(fromId);
+    if (sock) io.to(sock).emit('friend:accepted', await getUser(req.user.id));
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.post('/api/friends/reject', auth, (req, res) => {
-  const { fromId } = req.body || {};
-  db.prepare('DELETE FROM friends WHERE from_id=? AND to_id=?').run(fromId, req.user.id);
-  res.json({ ok: true });
+app.post('/api/friends/reject', auth, async (req, res) => {
+  try {
+    const { fromId } = req.body || {};
+    await db.run('DELETE FROM friends WHERE from_id=? AND to_id=?', [fromId, req.user.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── Blocks ─────────────────────────────────────────────────────────
-app.post('/api/users/:id/block', auth, (req, res) => {
-  const targetId = req.params.id;
-  if (targetId === req.user.id) return res.status(400).json({ error: 'Нельзя заблокировать себя' });
-  db.prepare('INSERT OR IGNORE INTO blocks VALUES(?,?,?)').run(req.user.id, targetId, Date.now());
-  // Remove friend relationship
-  db.prepare('DELETE FROM friends WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)').run(req.user.id, targetId, targetId, req.user.id);
-  res.json({ ok: true });
+app.post('/api/users/:id/block', auth, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    if (targetId === req.user.id) return res.status(400).json({ error: 'Нельзя заблокировать себя' });
+    await db.run('INSERT OR IGNORE INTO blocks VALUES(?,?,?)', [req.user.id, targetId, Date.now()]);
+    await db.run(
+      'DELETE FROM friends WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)',
+      [req.user.id, targetId, targetId, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
-app.delete('/api/users/:id/block', auth, (req, res) => {
-  db.prepare('DELETE FROM blocks WHERE blocker_id=? AND blocked_id=?').run(req.user.id, req.params.id);
-  res.json({ ok: true });
+app.delete('/api/users/:id/block', auth, async (req, res) => {
+  try {
+    await db.run('DELETE FROM blocks WHERE blocker_id=? AND blocked_id=?', [req.user.id, req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── DM conversations list ───────────────────────────────────────
-app.get('/api/dm/convos', auth, (req, res) => {
-  const me = req.user.id;
-  const rows = db.prepare(`
-    SELECT u.id, u.name, u.username, u.avatar, u.name_color,
-           MAX(m.ts) as last_ts,
-           (SELECT content FROM dm_messages
-            WHERE ((from_id=? AND to_id=u.id) OR (from_id=u.id AND to_id=?))
-            ORDER BY ts DESC LIMIT 1) as last_msg
-    FROM dm_messages m
-    JOIN users u ON u.id = CASE WHEN m.from_id=? THEN m.to_id ELSE m.from_id END
-    WHERE m.from_id=? OR m.to_id=?
-    GROUP BY u.id
-    ORDER BY last_ts DESC
-  `).all(me, me, me, me, me);
-  res.json(rows);
+app.get('/api/dm/convos', auth, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const rows = await db.all(`
+      SELECT u.id, u.name, u.username, u.avatar, u.name_color,
+             MAX(m.ts) as last_ts,
+             (SELECT content FROM dm_messages
+              WHERE ((from_id=? AND to_id=u.id) OR (from_id=u.id AND to_id=?))
+              ORDER BY ts DESC LIMIT 1) as last_msg
+      FROM dm_messages m
+      JOIN users u ON u.id = CASE WHEN m.from_id=? THEN m.to_id ELSE m.from_id END
+      WHERE m.from_id=? OR m.to_id=?
+      GROUP BY u.id
+      ORDER BY last_ts DESC
+    `, [me, me, me, me, me]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ── DM messages ────────────────────────────────────────────────────
-app.get('/api/dm/:userId', auth, (req, res) => {
-  const otherId = req.params.userId;
-  const msgs = db.prepare(`
-    SELECT m.*, u.name, u.avatar, u.username, u.name_color
-    FROM dm_messages m JOIN users u ON m.from_id=u.id
-    WHERE (m.from_id=? AND m.to_id=?) OR (m.from_id=? AND m.to_id=?)
-    ORDER BY m.ts LIMIT 200
-  `).all(req.user.id, otherId, otherId, req.user.id);
-  res.json(msgs);
+app.get('/api/dm/:userId', auth, async (req, res) => {
+  try {
+    const otherId = req.params.userId;
+    const msgs = await db.all(`
+      SELECT m.*, u.name, u.avatar, u.username, u.name_color
+      FROM dm_messages m JOIN users u ON m.from_id=u.id
+      WHERE (m.from_id=? AND m.to_id=?) OR (m.from_id=? AND m.to_id=?)
+      ORDER BY m.ts LIMIT 200
+    `, [req.user.id, otherId, otherId, req.user.id]);
+    res.json(msgs);
+  } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
 // ═══════════════════════════════════════════════════════════════════
@@ -510,7 +581,7 @@ app.get('/api/dm/:userId', auth, (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 const onlineUsers = new Map();
 const voiceRooms  = new Map();
-const userStatus  = new Map(); // uid -> 'online'|'dnd'|'invisible'
+const userStatus  = new Map();
 
 io.use((socket, next) => {
   try {
@@ -521,7 +592,7 @@ io.use((socket, next) => {
   }
 });
 
-io.on('connection', socket => {
+io.on('connection', async socket => {
   const uid = socket.user.id;
   onlineUsers.set(uid, socket.id);
   const savedStatus = userStatus.get(uid) || 'online';
@@ -530,62 +601,74 @@ io.on('connection', socket => {
   }
   socket.emit('status:ack', savedStatus);
 
-  db.prepare('SELECT room_id FROM members WHERE user_id=?').all(uid)
-    .forEach(({ room_id }) => socket.join(`room:${room_id}`));
+  try {
+    const rooms = await db.all('SELECT room_id FROM members WHERE user_id=?', [uid]);
+    rooms.forEach(({ room_id }) => socket.join(`room:${room_id}`));
+  } catch {}
 
   // ── Chat ──────────────────────────────────────────────────────
-  socket.on('msg', ({ roomId, content }) => {
-    if (!content?.trim() || content.length > 4000 || !isMember(roomId, uid)) return;
-    const id = uuid(), ts = Date.now();
-    const u  = getUser(uid);
-    db.prepare('INSERT INTO messages (id,room_id,user_id,content,ts) VALUES(?,?,?,?,?)').run(id, roomId, uid, content.trim(), ts);
-    io.to(`room:${roomId}`).emit('msg', {
-      id, room_id: roomId, user_id: uid,
-      content: content.trim(), ts,
-      name: u.name, avatar: u.avatar, username: u.username, name_color: u.name_color,
-    });
+  socket.on('msg', async ({ roomId, content }) => {
+    try {
+      if (!content?.trim() || content.length > 4000 || !await isMember(roomId, uid)) return;
+      const id = uuid(), ts = Date.now();
+      const u  = await getUser(uid);
+      await db.run('INSERT INTO messages (id,room_id,user_id,content,ts) VALUES(?,?,?,?,?)', [id, roomId, uid, content.trim(), ts]);
+      io.to(`room:${roomId}`).emit('msg', {
+        id, room_id: roomId, user_id: uid,
+        content: content.trim(), ts,
+        name: u.name, avatar: u.avatar, username: u.username, name_color: u.name_color,
+      });
+    } catch {}
   });
 
   // ── DM ────────────────────────────────────────────────────────
-  socket.on('dm:send', ({ toId, content }) => {
-    if (!content?.trim() || content.length > 4000) return;
-    if (isBlocked(uid, toId)) return;
-    const id = uuid(), ts = Date.now();
-    const u  = getUser(uid);
-    db.prepare('INSERT INTO dm_messages VALUES(?,?,?,?,?)').run(id, uid, toId, content.trim(), ts);
-    const msg = { id, from_id: uid, to_id: toId, content: content.trim(), ts, name: u.name, avatar: u.avatar, username: u.username, name_color: u.name_color };
-    const recipSock = onlineUsers.get(toId);
-    if (recipSock) io.to(recipSock).emit('dm:msg', msg);
-    socket.emit('dm:msg', msg);
+  socket.on('dm:send', async ({ toId, content }) => {
+    try {
+      if (!content?.trim() || content.length > 4000) return;
+      if (await isBlocked(uid, toId)) return;
+      const id = uuid(), ts = Date.now();
+      const u  = await getUser(uid);
+      await db.run('INSERT INTO dm_messages VALUES(?,?,?,?,?)', [id, uid, toId, content.trim(), ts]);
+      const msg = { id, from_id: uid, to_id: toId, content: content.trim(), ts, name: u.name, avatar: u.avatar, username: u.username, name_color: u.name_color };
+      const recipSock = onlineUsers.get(toId);
+      if (recipSock) io.to(recipSock).emit('dm:msg', msg);
+      socket.emit('dm:msg', msg);
+    } catch {}
   });
 
   // DM voice call
-  socket.on('dm:ring', ({ toId }) => {
-    if (isBlocked(uid, toId)) return;
-    const targetSock = onlineUsers.get(toId);
-    if (targetSock) io.to(targetSock).emit('dm:ring', { from: getUser(uid) });
+  socket.on('dm:ring', async ({ toId }) => {
+    try {
+      if (await isBlocked(uid, toId)) return;
+      const targetSock = onlineUsers.get(toId);
+      if (targetSock) io.to(targetSock).emit('dm:ring', { from: await getUser(uid) });
+    } catch {}
   });
 
-  socket.on('dm:ring:accept', ({ toId }) => {
-    const targetSock = onlineUsers.get(toId);
-    if (targetSock) io.to(targetSock).emit('dm:ring:accepted', { from: getUser(uid) });
+  socket.on('dm:ring:accept', async ({ toId }) => {
+    try {
+      const targetSock = onlineUsers.get(toId);
+      if (targetSock) io.to(targetSock).emit('dm:ring:accepted', { from: await getUser(uid) });
+    } catch {}
   });
 
   socket.on('dm:ring:decline', ({ toId }) => {
     const targetSock = onlineUsers.get(toId);
-    if (targetSock) io.to(targetSock).emit('dm:ring:declined', { from: getUser(uid) });
+    if (targetSock) io.to(targetSock).emit('dm:ring:declined', { from: { id: uid } });
   });
 
-  // Join socket room after invite (not present on connect since user wasn't a member then)
-  socket.on('room:socket:join', (roomId) => {
-    if (isMember(roomId, uid)) socket.join(`room:${roomId}`);
+  socket.on('room:socket:join', async (roomId) => {
+    try {
+      if (await isMember(roomId, uid)) socket.join(`room:${roomId}`);
+    } catch {}
   });
 
-  // Return current voice state for a room
-  socket.on('voice:get', (roomId) => {
-    if (!isMember(roomId, uid)) return;
-    const room = voiceRooms.get(roomId);
-    socket.emit('voice:state', { roomId, users: room ? [...room.keys()] : [] });
+  socket.on('voice:get', async (roomId) => {
+    try {
+      if (!await isMember(roomId, uid)) return;
+      const room = voiceRooms.get(roomId);
+      socket.emit('voice:state', { roomId, users: room ? [...room.keys()] : [] });
+    } catch {}
   });
 
   socket.on('dm:ring:cancel', ({ toId }) => {
@@ -599,25 +682,26 @@ io.on('connection', socket => {
   });
 
   // ── Voice signaling ───────────────────────────────────────────
-  socket.on('voice:join', ({ roomId }) => {
-    // Allow both normal rooms and DM voice rooms
-    if (roomId.startsWith('dm:')) {
-      const parts = roomId.replace('dm:', '').split('_');
-      if (!parts.includes(uid)) return;
-    } else if (!isMember(roomId, uid)) return;
+  socket.on('voice:join', async ({ roomId }) => {
+    try {
+      if (roomId.startsWith('dm:')) {
+        const parts = roomId.replace('dm:', '').split('_');
+        if (!parts.includes(uid)) return;
+      } else if (!await isMember(roomId, uid)) return;
 
-    if (!voiceRooms.has(roomId)) voiceRooms.set(roomId, new Map());
-    const room     = voiceRooms.get(roomId);
-    const existing = [...room.entries()].map(([userId, socketId]) => ({ userId, socketId }));
-    room.set(uid, socket.id);
-    socket.join(`voice:${roomId}`);
-    socket.emit('voice:init', existing);
-    socket.to(`voice:${roomId}`).emit('voice:joined', { userId: uid, socketId: socket.id });
-    if (!roomId.startsWith('dm:')) {
-      io.to(`room:${roomId}`).emit('voice:state', { roomId, users: [...room.keys()] });
-    } else {
-      io.to(`voice:${roomId}`).emit('voice:state', { roomId, users: [...room.keys()] });
-    }
+      if (!voiceRooms.has(roomId)) voiceRooms.set(roomId, new Map());
+      const room     = voiceRooms.get(roomId);
+      const existing = [...room.entries()].map(([userId, socketId]) => ({ userId, socketId }));
+      room.set(uid, socket.id);
+      socket.join(`voice:${roomId}`);
+      socket.emit('voice:init', existing);
+      socket.to(`voice:${roomId}`).emit('voice:joined', { userId: uid, socketId: socket.id });
+      if (!roomId.startsWith('dm:')) {
+        io.to(`room:${roomId}`).emit('voice:state', { roomId, users: [...room.keys()] });
+      } else {
+        io.to(`voice:${roomId}`).emit('voice:state', { roomId, users: [...room.keys()] });
+      }
+    } catch {}
   });
 
   socket.on('voice:leave', ({ roomId }) => voiceLeave(socket, uid, roomId));
@@ -666,15 +750,14 @@ function voiceLeave(socket, uid, roomId) {
 // ── Start ──────────────────────────────────────────────────────────
 (async () => {
   await initDb();
-  db.exec(INIT_SQL);
+  await db.exec(INIT_SQL);
 
-  // Migrations for existing databases
-  const migrateCol = (table, col, def) => {
-    try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); } catch {}
+  const migrateCol = async (table, col, def) => {
+    try { await db.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`); } catch {}
   };
-  migrateCol('users', 'email', 'TEXT');
-  migrateCol('users', 'name_color', 'TEXT');
-  migrateCol('users', 'bio', "TEXT DEFAULT ''");
+  await migrateCol('users', 'email', 'TEXT');
+  await migrateCol('users', 'name_color', 'TEXT');
+  await migrateCol('users', 'bio', "TEXT DEFAULT ''");
 
   server.listen(PORT, '0.0.0.0', () => {
     if (IS_PROD) {

@@ -1,86 +1,47 @@
 'use strict';
-/**
- * Thin wrapper around sql.js that mimics the better-sqlite3 synchronous API.
- * sql.js uses WebAssembly — no native compilation needed.
- */
-const path    = require('path');
-const fs      = require('fs');
-const initSqlJs = require('sql.js');
+const { createClient } = require('@libsql/client');
+const path = require('path');
+const fs   = require('fs');
 
 const DATA_DIR = process.env.ZVONOK_DATA || path.join(__dirname, 'data');
-const DB_PATH  = path.join(DATA_DIR, 'zvonok.db');
-let   sqlDb    = null;
-let   saveTimer = null;
+let client;
 
-// Debounced write to disk — coalesces rapid writes into one
-function _scheduleSave() {
-  if (saveTimer) return;
-  saveTimer = setImmediate(() => {
-    saveTimer = null;
-    if (!sqlDb) return;
-    const buf = sqlDb.export();
-    fs.writeFileSync(DB_PATH, Buffer.from(buf));
-  });
+function toObj(columns, row) {
+  const obj = {};
+  for (let i = 0; i < columns.length; i++) {
+    const v = row[i];
+    obj[columns[i]] = typeof v === 'bigint' ? Number(v) : v;
+  }
+  return obj;
 }
 
-// Normalise positional args: (.run(a,b,c)) or (.run([a,b,c]))
-function _params(args) {
-  if (args.length === 0) return [];
-  if (args.length === 1 && Array.isArray(args[0])) return args[0];
-  return Array.from(args);
-}
-
-class Stmt {
-  constructor(sql) { this._sql = sql; }
-
-  run(...args) {
-    sqlDb.run(this._sql, _params(args));
-    _scheduleSave();
-    return { changes: sqlDb.getRowsModified() };
-  }
-
-  get(...args) {
-    const stmt = sqlDb.prepare(this._sql);
-    stmt.bind(_params(args));
-    const row = stmt.step() ? stmt.getAsObject() : undefined;
-    stmt.free();
-    return row;
-  }
-
-  all(...args) {
-    const stmt = sqlDb.prepare(this._sql);
-    stmt.bind(_params(args));
-    const rows = [];
-    while (stmt.step()) rows.push(stmt.getAsObject());
-    stmt.free();
-    return rows;
-  }
-}
-
-// Public db object — mirrors better-sqlite3 Database interface
 const db = {
-  prepare(sql) { return new Stmt(sql); },
-
-  exec(sql) {
-    sqlDb.exec(sql);
-    _scheduleSave();
+  async run(sql, args = []) {
+    const r = await client.execute({ sql, args });
+    return { changes: r.rowsAffected };
   },
-
-  // no-op: sql.js doesn't need WAL pragma
-  pragma() {},
+  async get(sql, args = []) {
+    const r = await client.execute({ sql, args });
+    if (!r.rows.length) return undefined;
+    return toObj(r.columns, r.rows[0]);
+  },
+  async all(sql, args = []) {
+    const r = await client.execute({ sql, args });
+    return r.rows.map(row => toObj(r.columns, row));
+  },
+  async exec(sql) {
+    await client.executeMultiple(sql);
+  },
 };
 
-// Must be called once before using db
 async function initDb() {
-  const SQL = await initSqlJs({
-    locateFile: file => path.join(__dirname, 'node_modules', 'sql.js', 'dist', file),
-  });
-
-  if (fs.existsSync(DB_PATH)) {
-    const buf = fs.readFileSync(DB_PATH);
-    sqlDb = new SQL.Database(buf);
+  const url   = process.env.TURSO_URL;
+  const token = process.env.TURSO_TOKEN;
+  if (url) {
+    client = createClient({ url, authToken: token, intMode: 'number' });
   } else {
-    sqlDb = new SQL.Database();
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    client = createClient({ url: `file:${path.join(DATA_DIR, 'zvonok.db')}`, intMode: 'number' });
   }
 }
 
