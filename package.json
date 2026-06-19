@@ -1,73 +1,73 @@
-{
-  "name": "zvonok",
-  "version": "1.0.2",
-  "description": "Голосовое приложение для своих",
-  "main": "electron.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "SET ELECTRON_RUN_AS_NODE= && electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "release": "electron-builder --publish always"
-  },
-  "dependencies": {
-    "@libsql/client": "^0.17.4",
-    "bcryptjs": "^2.4.3",
-    "electron-updater": "^6.8.9",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1",
-    "node-forge": "^1.4.0",
-    "nodemailer": "^8.0.11",
-    "selfsigned": "^5.5.0",
-    "socket.io": "^4.7.2",
-    "sql.js": "^1.12.0",
-    "uuid": "^9.0.0"
-  },
-  "devDependencies": {
-    "electron": "^42.4.0",
-    "electron-builder": "^26.15.3",
-    "png-to-ico": "^3.0.1",
-    "sharp": "^0.35.1"
-  },
-  "build": {
-    "appId": "com.zvonok.app",
-    "productName": "Звонок",
-    "asar": false,
-    "icon": "build/icon.ico",
-    "publish": {
-      "provider": "github",
-      "owner": "rusikk5",
-      "repo": "zvonok"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    },
-    "files": [
-      "**/*",
-      "!.git/**",
-      "!*.bat",
-      "!data/**",
-      "!*.jsonl",
-      "!test-*.js",
-      "!test-*.mjs",
-      "!server.js",
-      "!db.js"
-    ]
-  }
+﻿{
+    "name":  "zvonok",
+    "version":  "1.0.3",
+    "description":  "Р“РѕР»РѕСЃРѕРІРѕРµ РїСЂРёР»РѕР¶РµРЅРёРµ РґР»СЏ СЃРІРѕРёС…",
+    "main":  "electron.js",
+    "scripts":  {
+                    "start":  "node server.js",
+                    "dev":  "SET ELECTRON_RUN_AS_NODE= \u0026\u0026 electron .",
+                    "pack":  "electron-builder --dir",
+                    "dist":  "electron-builder",
+                    "release":  "electron-builder --publish always"
+                },
+    "dependencies":  {
+                         "@libsql/client":  "^0.17.4",
+                         "bcryptjs":  "^2.4.3",
+                         "electron-updater":  "^6.8.9",
+                         "express":  "^4.18.2",
+                         "jsonwebtoken":  "^9.0.2",
+                         "multer":  "^1.4.5-lts.1",
+                         "node-forge":  "^1.4.0",
+                         "nodemailer":  "^8.0.11",
+                         "selfsigned":  "^5.5.0",
+                         "socket.io":  "^4.7.2",
+                         "sql.js":  "^1.12.0",
+                         "uuid":  "^9.0.0"
+                     },
+    "devDependencies":  {
+                            "electron":  "^42.4.0",
+                            "electron-builder":  "^26.15.3",
+                            "png-to-ico":  "^3.0.1",
+                            "sharp":  "^0.35.1"
+                        },
+    "build":  {
+                  "appId":  "com.zvonok.app",
+                  "productName":  "Р—РІРѕРЅРѕРє",
+                  "asar":  false,
+                  "icon":  "build/icon.ico",
+                  "publish":  {
+                                  "provider":  "github",
+                                  "owner":  "rusikk5",
+                                  "repo":  "zvonok"
+                              },
+                  "win":  {
+                              "target":  [
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             }
+                                         ],
+                              "icon":  "build/icon.ico"
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "perMachine":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true
+                           },
+                  "files":  [
+                                "**/*",
+                                "!.git/**",
+                                "!*.bat",
+                                "!data/**",
+                                "!*.jsonl",
+                                "!test-*.js",
+                                "!test-*.mjs",
+                                "!server.js",
+                                "!db.js"
+                            ]
+              }
 }
