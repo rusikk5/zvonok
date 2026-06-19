@@ -1,7 +1,6 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
-const { autoUpdater } = require('electron-updater');
 const { PROD_SERVER_URL } = require('./config');
 
 let mainWindow  = null;
@@ -182,6 +181,7 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     if (app.isPackaged) {
       // ── Production: connect to deployed server, check updates ──
+      const { autoUpdater } = require('electron-updater');
       createSplash('Проверяю обновления…');
 
       autoUpdater.autoDownload = true;

@@ -297,6 +297,15 @@ function setupSocket() {
     if (roomId === S.roomId) { S.members = S.members.filter(m => m.id !== userId); renderMembers(); }
   });
 
+  S.socket.on('sys:msg', ({ roomId, text }) => {
+    if (roomId !== S.roomId) return;
+    const el = document.createElement('div');
+    el.className = 'sys-msg';
+    el.textContent = text;
+    $('messages').appendChild(el);
+    scrollEl($('messages'));
+  });
+
   S.socket.on('friend:request', (user) => {
     S.pending.push(user);
     renderFriends();
@@ -444,10 +453,15 @@ async function selectRoom(id) {
   renderMessages($('messages'), S.messages);
   scrollEl($('messages'), false);
 
-  $('vch-cnt').textContent = '';
-  S.voiceUsers.clear();
-  S.voiceRoom = [];
+  // Don't clear voice if we're in voice in this same room
+  if (S.voice.roomId !== id) {
+    S.voiceUsers.clear();
+    S.voiceRoom = [];
+  }
   renderVoiceCard();
+
+  // Request current voice state from server
+  S.socket.emit('voice:get', id);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1226,6 +1240,8 @@ function setupUI() {
     try {
       const room = await api('/api/rooms/join', { method: 'POST', body: JSON.stringify({ invite }) });
       if (!S.rooms.find(r => r.id === room.id)) S.rooms.push(room);
+      // Subscribe this socket to the new room's events
+      S.socket.emit('room:socket:join', room.id);
       renderRoomIcons();
       hideModal('modal-create');
       selectRoom(room.id);

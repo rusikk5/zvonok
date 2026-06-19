@@ -123,13 +123,12 @@ class VoiceEngine {
     this.audioEls.set(socketId, audio);
 
     pc.ontrack = (e) => {
-      if (!e.streams[0]) return;
-      if (e.track.kind === 'audio') {
-        audio.srcObject = e.streams[0];
-        this._watchVolume(e.streams[0], (v) => {
-          if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
-        });
-      }
+      if (e.track.kind !== 'audio') return;
+      const stream = e.streams[0] || new MediaStream([e.track]);
+      audio.srcObject = stream;
+      this._watchVolume(stream, (v) => {
+        if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
+      });
     };
 
     pc.onicecandidate = ({ candidate }) => {

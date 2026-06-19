@@ -389,7 +389,9 @@ app.post('/api/rooms/join', auth, (req, res) => {
   const room = db.prepare('SELECT * FROM rooms WHERE invite=?').get((invite || '').toUpperCase().trim());
   if (!room) return res.status(404).json({ error: 'Комната не найдена' });
   db.prepare('INSERT OR IGNORE INTO members VALUES(?,?,?)').run(room.id, req.user.id, Date.now());
-  io.to(`room:${room.id}`).emit('room:joined', { roomId: room.id, user: getUser(req.user.id) });
+  const joinUser = getUser(req.user.id);
+  io.to(`room:${room.id}`).emit('room:joined', { roomId: room.id, user: joinUser });
+  io.to(`room:${room.id}`).emit('sys:msg', { roomId: room.id, text: `${joinUser.name || joinUser.username} присоединился к серверу` });
   res.json(room);
 });
 
@@ -572,6 +574,18 @@ io.on('connection', socket => {
   socket.on('dm:ring:decline', ({ toId }) => {
     const targetSock = onlineUsers.get(toId);
     if (targetSock) io.to(targetSock).emit('dm:ring:declined', { from: getUser(uid) });
+  });
+
+  // Join socket room after invite (not present on connect since user wasn't a member then)
+  socket.on('room:socket:join', (roomId) => {
+    if (isMember(roomId, uid)) socket.join(`room:${roomId}`);
+  });
+
+  // Return current voice state for a room
+  socket.on('voice:get', (roomId) => {
+    if (!isMember(roomId, uid)) return;
+    const room = voiceRooms.get(roomId);
+    socket.emit('voice:state', { roomId, users: room ? [...room.keys()] : [] });
   });
 
   socket.on('dm:ring:cancel', ({ toId }) => {
