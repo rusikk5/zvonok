@@ -4,8 +4,8 @@
   "description": "Голосовое приложение для своих",
   "main": "electron.js",
   "scripts": {
-    "start": "SET ELECTRON_RUN_AS_NODE= && electron .",
-    "server": "node server.js",
+    "start": "node server.js",
+    "dev": "SET ELECTRON_RUN_AS_NODE= && electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "release": "electron-builder --publish always"
