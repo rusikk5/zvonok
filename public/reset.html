@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Звонок — Сброс пароля</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="auth-body">
+<div class="auth-bg">
+  <div class="auth-particle" style="left:20%;animation-delay:0s;animation-duration:9s"></div>
+  <div class="auth-particle" style="left:50%;animation-delay:2s;animation-duration:7s"></div>
+  <div class="auth-particle" style="left:75%;animation-delay:1s;animation-duration:11s"></div>
+</div>
+<div class="auth-center">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <img src="/icon.png" alt="Звонок" class="auth-logo-img">
+      <span class="auth-brand">Звонок</span>
+    </div>
+    <div style="font-size:1rem;font-weight:700;margin-bottom:18px;text-align:center">Новый пароль</div>
+    <form class="auth-form" id="form-reset">
+      <div class="field-grp">
+        <label>Новый пароль</label>
+        <input type="password" name="password" placeholder="минимум 4 символа" autocomplete="new-password" required>
+      </div>
+      <div class="field-grp">
+        <label>Повтори пароль</label>
+        <input type="password" name="password2" placeholder="ещё раз" autocomplete="new-password" required>
+      </div>
+      <div class="auth-err" id="err-reset"></div>
+      <div class="auth-ok hidden" id="ok-reset">Пароль изменён! <a href="/" style="color:var(--accent)">Войти</a></div>
+      <button type="submit" class="abtn" id="btn-reset">Сохранить пароль</button>
+    </form>
+  </div>
+</div>
+<script>
+'use strict';
+const token = new URLSearchParams(location.search).get('token');
+if (!token) { document.querySelector('.auth-card').innerHTML = '<div style="text-align:center;padding:20px;color:var(--live)">Недействительная ссылка</div>'; }
+
+document.getElementById('form-reset')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btn-reset');
+  const err = document.getElementById('err-reset');
+  const ok  = document.getElementById('ok-reset');
+  const fd  = new FormData(e.target);
+  const pw  = fd.get('password');
+  const pw2 = fd.get('password2');
+  err.textContent = '';
+  if (pw !== pw2) { err.textContent = 'Пароли не совпадают'; return; }
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/reset-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password: pw }),
+    });
+    const data = await res.json();
+    if (!res.ok) { err.textContent = data.error; return; }
+    ok.classList.remove('hidden');
+    e.target.style.display = 'none';
+  } catch { err.textContent = 'Ошибка соединения'; }
+  finally { btn.textContent = 'Сохранить пароль'; btn.disabled = false; }
+});
+</script>
+</body>
+</html>

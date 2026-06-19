@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Звонок</title>
+<link rel="icon" type="image/png" href="/icon.png">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+
+<div class="window">
+
+  <div class="titlebar">
+    <div class="titlebar-rail-gap"></div>
+    <div class="title-actions">
+      <label class="search glass" id="tbr-search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Поиск">
+      </label>
+    </div>
+    <h1>Звонок</h1>
+    <div class="traffic"><i class="y"></i><i class="g"></i><i class="r"></i></div>
+  </div>
+
+  <div class="app">
+
+    <!-- ─── Рейл серверов ─────────────────────────────────── -->
+    <nav class="rail">
+      <div class="server glass" id="btn-friends" title="Друзья">
+        <img src="/icon.png" alt="Звонок" class="rail-logo">
+      </div>
+      <div id="nav-rooms"></div>
+      <div class="server glass add" id="btn-new-room" title="Создать комнату / Войти по коду">+</div>
+    </nav>
+
+    <!-- ─── Сайдбар ────────────────────────────────────────── -->
+    <aside class="sidebar">
+
+      <div class="panel glass stretch">
+        <div class="guild-name" id="sb-hdr">
+          <span id="sb-title">Звонок</span>
+          <button class="sb-arrow hidden" id="btn-room-menu">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+
+        <!-- Текстовые каналы -->
+        <div id="text-sec" style="display:none">
+          <div class="cat">
+            <span>Текстовые каналы</span>
+            <button class="cat-add" title="Создать канал">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+          <div class="tch-wrap">
+            <div class="tch-row" id="main-tch-row">
+              <svg class="tch-hash" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
+              <span class="tch-name" id="txt-ch-name">канал</span>
+              <div class="tch-acts">
+                <button class="tch-icon" id="btn-toggle-members-ch" title="Участники">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </button>
+                <button class="tch-icon" id="btn-ch-settings" title="Настройки">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Голосовые каналы -->
+        <div id="voice-sec" style="display:none">
+          <div class="cat">
+            <span>Голосовые каналы</span>
+            <button class="cat-add" title="Создать канал">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+          <div class="vch-wrap">
+            <!-- Пустой канал -->
+            <div class="vch-row" id="vch-empty-row">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+              <span class="vch-name">Поговорите тут</span>
+            </div>
+            <!-- Активный голосовой канал (показывается когда кто-то в голосе) -->
+            <div id="vch-active-wrap" style="display:none">
+              <div class="vch-row vch-row-active" id="btn-voice-row">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                <span class="vch-name" id="vac-name"></span>
+                <span class="vch-timer" id="vac-timer">0:00:00</span>
+                <button class="vch-btn" id="btn-voice">Войти</button>
+              </div>
+              <div id="vac-list"></div>
+            </div>
+            <span id="vch-cnt" style="display:none"></span>
+          </div>
+        </div>
+
+        <!-- Инвайт-код -->
+        <div id="invite-sec" style="display:none">
+          <div class="invite-row">
+            <div class="invite-code" id="invite-code-txt"></div>
+            <button class="copy-btn" id="btn-copy-invite" title="Скопировать">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div style="flex:1"></div>
+      </div>
+
+      <!-- Демонстрация экрана (видно когда активна) -->
+      <div class="screen-card glass hidden" id="screen-card">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span class="screen-card-name">Экран 1</span>
+        <button class="screen-card-btn" id="btn-screen-share-stop" title="Остановить">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="17 8 22 8 22 13"/><polyline points="7 16 2 16 2 11"/></svg>
+        </button>
+      </div>
+
+      <!-- Голосовое подключение -->
+      <div class="panel glass voice-conn hidden" id="voice-status">
+        <div class="row1">
+          <span class="sig">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12" y2="20"/></svg>
+          </span>
+          <div class="vc-info">
+            <b>Голосовая связь</b>
+            <small id="vs-room-name"></small>
+          </div>
+          <div class="right">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+        <div class="voice-btns">
+          <button class="vbtn" id="btn-vs-camera" title="Камера (вкл/выкл)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/><line x1="2" y1="2" x2="22" y2="22" stroke-width="2"/></svg>
+          </button>
+          <button class="vbtn" id="btn-vs-screen" title="Демонстрация экрана">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </button>
+          <button class="vbtn" id="btn-vs-more" title="Ещё">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
+          </button>
+          <button class="vbtn" id="btn-voice-leave" title="Покинуть войс" style="color:var(--live)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.45-2.98"/><path d="M2 2l20 20"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Меню статуса -->
+      <div id="status-menu" class="status-menu hidden">
+        <div class="sopt" data-status="online">
+          <span class="sopt-dot" style="background:#23a55a"></span>В сети
+        </div>
+        <div class="sopt" data-status="dnd">
+          <span class="sopt-dot sopt-dnd"></span>Не беспокоить
+        </div>
+        <div class="sopt" data-status="invisible">
+          <span class="sopt-dot" style="background:#747f8d;border:2px solid #747f8d"></span>Невидимка
+        </div>
+      </div>
+
+      <!-- Юзербар -->
+      <div class="panel glass userbar">
+        <span class="pix" id="ub-avatar" style="width:36px;height:36px;cursor:pointer" title="Изменить статус">
+          <span class="status-dot" id="ub-status-dot"></span>
+        </span>
+        <div class="meta">
+          <b id="ub-name"></b>
+          <small id="ub-tag"></small>
+        </div>
+        <div class="acts">
+          <button class="iconbtn" id="btn-mute" title="Микрофон">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+          </button>
+          <button class="iconbtn" id="btn-deafen" title="Наушники">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>
+          </button>
+          <button class="iconbtn" id="btn-settings" title="Настройки">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ─── Основная зона ──────────────────────────────────── -->
+    <main class="chat glass">
+
+      <!-- Пустое состояние -->
+      <div class="empty-state" id="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:.4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <div class="empty-title">Добро пожаловать в Звонок!</div>
+        <div class="empty-sub">Создай группу или войди по пригласительному коду.</div>
+        <div class="empty-btns">
+          <button class="abtn" id="empty-create">Создать группу</button>
+        </div>
+      </div>
+
+      <!-- Список друзей -->
+      <div class="friends-wrap hidden" id="friends-wrap" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="chat-hdr" style="flex-shrink:0;margin-bottom:12px">
+          <span class="ch-ico">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+          <span class="ch-name">Друзья</span>
+          <div style="margin-left:auto">
+            <button class="abtn sm" id="btn-add-friend">+ Добавить друга</button>
+          </div>
+        </div>
+        <div class="friends-content" id="friends-content"></div>
+      </div>
+
+      <!-- DM чат -->
+      <div class="hidden" id="dm-wrap" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="chat-hdr" style="flex-shrink:0;margin-bottom:4px">
+          <button class="iconbtn" id="btn-dm-back" title="Назад">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span class="pix" id="dm-hdr-ava" style="width:36px;height:36px"></span>
+          <span class="ch-name" id="dm-hdr-name" style="margin-left:8px"></span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="iconbtn" id="btn-dm-call" title="Позвонить">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.78A16 16 0 0 0 12 16l.94-.94a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 19.72 16.92z"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="chat-scroll" id="dm-messages"></div>
+        <div class="composer">
+          <button class="plus">+</button>
+          <textarea class="ifield" id="dm-input" placeholder="Написать сообщение…" rows="1"></textarea>
+          <div class="cicons">
+            <svg id="btn-dm-send" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Чат -->
+      <div class="hidden" id="chat-wrap" style="display:flex;flex-direction:column;flex:1;min-height:0">
+        <div class="chat-hdr" style="flex-shrink:0;margin-bottom:4px">
+          <span class="ch-ico">#</span>
+          <span class="ch-name" id="ch-name"></span>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <button class="iconbtn" id="btn-toggle-members" title="Участники">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="chat-scroll" id="messages"></div>
+        <div class="composer">
+          <button class="plus">+</button>
+          <textarea class="ifield" id="msg-input" placeholder="Написать сообщение…" rows="1"></textarea>
+          <div class="cicons">
+            <svg id="btn-send" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ─── Участники ──────────────────────────────────────── -->
+    <aside class="members glass" id="members-panel">
+      <div id="members-list"></div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- ═══ Мини-профиль ══════════════════════════════════════════ -->
+<div class="mini-profile hidden" id="mini-profile">
+  <div class="mp-banner" id="mp-banner"></div>
+  <div class="mp-body">
+    <div class="mp-ava-wrap">
+      <div class="mp-ava" id="mp-ava"></div>
+      <div class="mp-online" id="mp-online"></div>
+    </div>
+    <div class="mp-name" id="mp-name"></div>
+    <div class="mp-username" id="mp-username"></div>
+    <div class="mp-bio" id="mp-bio"></div>
+    <div class="mp-divider"></div>
+    <div class="mp-btns">
+      <button class="mp-btn primary" id="mp-btn-dm">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Написать
+      </button>
+      <button class="mp-btn" id="mp-btn-call">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.78A16 16 0 0 0 12 16l.94-.94a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 19.72 16.92z"/></svg>
+        Позвонить
+      </button>
+      <button class="mp-btn" id="mp-btn-friend"></button>
+      <button class="mp-btn danger" id="mp-btn-block"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Входящий звонок ════════════════════════════════════════ -->
+<div class="call-ring hidden" id="call-ring">
+  <div class="call-ring-inner">
+    <div class="call-ring-ava" id="ring-ava"></div>
+    <div class="call-ring-name" id="ring-name"></div>
+    <div class="call-ring-sub">Входящий звонок</div>
+    <div class="call-ring-btns">
+      <button class="ring-btn accept" id="btn-ring-accept">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.41 2 2 0 0 1 3.6 1.21h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.78A16 16 0 0 0 12 16l.94-.94a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 19.72 16.92z"/></svg>
+      </button>
+      <button class="ring-btn decline" id="btn-ring-decline">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.45-2.98"/><path d="M2 2l20 20"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Камера PiP ════════════════════════════════════════════ -->
+<div class="camera-pip hidden" id="camera-pip">
+  <video id="camera-video" autoplay muted playsinline></video>
+  <button class="camera-pip-close" id="btn-pip-close">✕</button>
+</div>
+
+<!-- ═══ Модальные окна ════════════════════════════════════════ -->
+
+<!-- Создать группу / Войти по коду -->
+<div class="modal-ov hidden" id="modal-create">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span id="modal-create-title">Новая группа</span>
+      <button class="modal-x" data-close="modal-create">✕</button>
+    </div>
+    <div class="auth-tabs" style="margin:0 18px 4px;padding-bottom:0">
+      <button class="atab active" id="mc-tab-create">Создать</button>
+      <button class="atab" id="mc-tab-join">Войти по коду</button>
+    </div>
+    <div class="modal-body" id="mc-body-create">
+      <div class="field-grp">
+        <label>Название группы</label>
+        <input id="create-name" type="text" placeholder="Моя группа">
+      </div>
+    </div>
+    <div class="modal-body hidden" id="mc-body-join">
+      <div class="field-grp">
+        <label>Пригласительный код</label>
+        <input id="join-code" type="text" placeholder="XXXXXXXX" class="code-input">
+      </div>
+    </div>
+    <div class="modal-err" id="create-err"></div>
+    <div class="modal-foot">
+      <button class="abtn" id="btn-create-ok" style="width:100%">Создать</button>
+      <button class="abtn hidden" id="btn-join-ok" style="width:100%">Войти</button>
+    </div>
+  </div>
+</div>
+
+<!-- Добавить друга -->
+<div class="modal-ov hidden" id="modal-add-friend">
+  <div class="modal">
+    <div class="modal-hdr">
+      Добавить друга
+      <button class="modal-x" data-close="modal-add-friend">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-grp">
+        <label>Имя пользователя</label>
+        <input id="friend-input" type="text" placeholder="@username">
+      </div>
+      <div class="search-res" id="friend-search-res"></div>
+    </div>
+    <div class="modal-err" id="friend-err"></div>
+    <div class="modal-foot">
+      <button class="abtn" id="btn-send-req" style="width:100%">Отправить заявку</button>
+    </div>
+  </div>
+</div>
+
+<!-- Настройки профиля -->
+<div class="modal-ov hidden" id="modal-settings">
+  <div class="modal modal-wide">
+    <div class="modal-hdr">
+      Настройки
+      <button class="modal-x" data-close="modal-settings">✕</button>
+    </div>
+    <div class="modal-body modal-scroll">
+
+      <div class="set-sec">
+        <div class="set-sec-title">Профиль</div>
+        <div class="profile-edit-row">
+          <div class="profile-ava-wrap">
+            <div class="profile-ava" id="profile-ava-preview"></div>
+            <button class="ava-change-btn" id="btn-change-avatar">Изменить фото</button>
+            <input type="file" id="avatar-input" accept="image/*" style="display:none">
+          </div>
+          <div class="profile-fields">
+            <div class="field-grp">
+              <label>Отображаемое имя</label>
+              <input id="set-name" type="text" placeholder="Ваше имя">
+            </div>
+            <div class="field-grp">
+              <label>Имя пользователя</label>
+              <input id="set-username" type="text" class="disabled-input" disabled>
+            </div>
+            <div class="field-grp">
+              <label>О себе</label>
+              <textarea id="set-bio" rows="2" placeholder="Пару слов о себе…" style="resize:none"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-sec">
+        <div class="set-sec-title">Кастомизация</div>
+        <div class="set-hint">Цвет никнейма</div>
+        <div class="color-presets" id="color-presets"></div>
+        <div class="field-grp" style="margin-top:10px">
+          <label>Свой цвет (HEX)</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="set-color-hex" type="text" placeholder="#f4a933" style="flex:1">
+            <input id="set-color-pick" type="color" style="width:40px;height:36px;padding:2px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);cursor:pointer">
+          </div>
+        </div>
+        <div style="margin-top:10px">
+          <span style="font-size:.8rem;color:var(--ink-dim)">Предпросмотр: </span>
+          <span id="color-preview-name" style="font-weight:700"></span>
+        </div>
+      </div>
+
+      <div class="set-sec">
+        <div class="set-sec-title">Аудио</div>
+        <div class="set-hint">Микрофон</div>
+        <select id="sel-mic" class="dev-select"></select>
+        <div class="mic-meter-wrap"><div class="mic-meter-bar" id="mic-meter"></div></div>
+        <div class="mic-meter-lbl">Уровень сигнала</div>
+        <div style="margin-top:8px"><button class="abtn sm outline" id="btn-test-mic">Тест микрофона</button></div>
+        <div class="set-hint" style="margin-top:14px">Динамики</div>
+        <select id="sel-speaker" class="dev-select"></select>
+      </div>
+
+      <div class="set-sec">
+        <div class="set-sec-title">Аккаунт</div>
+        <button class="abtn danger" id="btn-logout" style="width:100%">Выйти из аккаунта</button>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button class="abtn" id="btn-save-profile" style="width:100%">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Настройки комнаты -->
+<div class="modal-ov hidden" id="modal-room-set">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span id="room-set-title">Настройки комнаты</span>
+      <button class="modal-x" data-close="modal-room-set">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="set-sec-title">Пригласительный код</div>
+      <div class="invite-big-row">
+        <div class="invite-big-code" id="room-invite-code"></div>
+        <button class="abtn sm" id="btn-copy-room-invite" title="Скопировать">📋</button>
+      </div>
+    </div>
+    <div class="modal-foot" style="margin-top:20px">
+      <button class="abtn danger" id="btn-leave-room" style="width:100%">Покинуть комнату</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Toast ════════════════════════════════════════════════ -->
+<div id="toast-wrap" class="toast-wrap"></div>
+
+<!-- ═══ Avatar Crop Modal ════════════════════════════════════ -->
+<div id="modal-avatar-crop" class="modal-ov hidden">
+  <div class="modal" style="width:440px">
+    <div class="modal-hdr">
+      Редактировать фото
+      <button class="modal-x" id="btn-crop-cancel">✕</button>
+    </div>
+    <div class="modal-body" style="align-items:center;gap:14px;padding:18px 18px 8px">
+      <canvas id="ava-crop-canvas" width="380" height="380" style="border-radius:10px;display:block;touch-action:none"></canvas>
+      <div class="ava-crop-zoom-row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="range" id="ava-zoom-slider" min="0" max="100" value="0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:4px 18px 16px">
+      <button class="abtn outline sm" id="btn-crop-cancel2">Отмена</button>
+      <button class="abtn sm" id="btn-crop-confirm">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ Скрипты ══════════════════════════════════════════════ -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  var el = document.getElementById('toast-wrap');
+  if (el) {
+    var t = document.createElement('div');
+    t.className = 'toast error';
+    t.style.cssText = 'max-width:90vw;word-break:break-all;z-index:99999';
+    t.textContent = 'JS Error: ' + msg + ' (' + src.split('/').pop() + ':' + line + ')';
+    el.appendChild(t);
+  }
+};
+</script>
+<script src="/js/voice.js"></script>
+<script src="/js/main.js"></script>
+<script>
+if (window.electronAPI) {
+  const win = document.querySelector('.window');
+  document.querySelector('.traffic .r').addEventListener('click', () => {
+    win.classList.add('win-closing');
+    setTimeout(() => window.electronAPI.close(), 150);
+  });
+  document.querySelector('.traffic .y').addEventListener('click', () => {
+    win.classList.add('win-minimizing');
+    setTimeout(() => window.electronAPI.minimize(), 200);
+  });
+  document.querySelector('.traffic .g').addEventListener('click', () => window.electronAPI.maximize());
+  window.addEventListener('focus', () => win.classList.remove('win-minimizing'));
+
+  // Titlebar drag with Discord-snap
+  let _drag = false;
+  document.querySelector('.titlebar').addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('input, button, .traffic, .search')) return;
+    e.preventDefault();
+    _drag = true;
+    window.electronAPI.dragStart(e.screenX, e.screenY);
+  });
+  document.addEventListener('mousemove', e => {
+    if (_drag) window.electronAPI.dragMove(e.screenX, e.screenY);
+  });
+  document.addEventListener('mouseup', () => {
+    if (_drag) { _drag = false; window.electronAPI.dragEnd(); }
+  });
+
+}
+</script>
+</body>
+</html>

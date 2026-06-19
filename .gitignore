@@ -1,0 +1,6 @@
+﻿node_modules/
+dist/
+data/
+*.jsonl
+.claude/
+public/uploads/

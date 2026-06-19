@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Звонок — Войти</title>
+<link rel="icon" type="image/png" href="/icon.png">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="auth-body">
+
+<div class="auth-bg">
+  <div class="auth-particle" style="left:10%;animation-delay:0s;animation-duration:8s"></div>
+  <div class="auth-particle" style="left:25%;animation-delay:1.5s;animation-duration:10s"></div>
+  <div class="auth-particle" style="left:45%;animation-delay:3s;animation-duration:7s"></div>
+  <div class="auth-particle" style="left:65%;animation-delay:0.5s;animation-duration:11s"></div>
+  <div class="auth-particle" style="left:80%;animation-delay:2s;animation-duration:9s"></div>
+  <div class="auth-particle" style="left:55%;animation-delay:4s;animation-duration:6s"></div>
+</div>
+
+<div class="auth-center">
+  <div class="auth-card">
+
+    <div class="auth-logo">
+      <img src="/icon.png" alt="Звонок" class="auth-logo-img">
+      <span class="auth-brand">Звонок</span>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="atab active" id="tab-login">Войти</button>
+      <button class="atab" id="tab-reg">Регистрация</button>
+    </div>
+
+    <!-- Login -->
+    <form class="auth-form" id="form-login">
+      <div class="field-grp">
+        <label>Логин или Email</label>
+        <input type="text" name="username" placeholder="твой_ник или email" autocomplete="username" spellcheck="false">
+      </div>
+      <div class="field-grp">
+        <label>Пароль</label>
+        <input type="password" name="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <div class="auth-err" id="err-login"></div>
+      <button type="submit" class="abtn">Войти ▶</button>
+      <button type="button" class="auth-link" id="btn-forgot">Забыли пароль?</button>
+    </form>
+
+    <!-- Register -->
+    <form class="auth-form hidden" id="form-reg">
+      <div class="field-grp">
+        <label>Имя (как тебя видят друзья)</label>
+        <input type="text" name="name" placeholder="Например: Гарфилд кот" maxlength="32">
+      </div>
+      <div class="field-grp">
+        <label>Логин (для входа)</label>
+        <input type="text" name="username" placeholder="уникальный_ник" autocomplete="username" spellcheck="false" maxlength="24">
+      </div>
+      <div class="field-grp">
+        <label>Email <span style="opacity:.5;font-size:.7em">(необязательно, для сброса пароля)</span></label>
+        <input type="email" name="email" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="field-grp">
+        <label>Пароль</label>
+        <input type="password" name="password" placeholder="минимум 4 символа" autocomplete="new-password">
+      </div>
+      <div class="auth-err" id="err-reg"></div>
+      <button type="submit" class="abtn">Создать аккаунт ▶</button>
+    </form>
+
+    <!-- Forgot password -->
+    <form class="auth-form hidden" id="form-forgot">
+      <div style="text-align:center;margin-bottom:8px;font-size:.88rem;color:var(--ink-dim)">Введи email — пришлём ссылку для сброса</div>
+      <div class="field-grp">
+        <label>Email</label>
+        <input type="email" name="email" placeholder="you@example.com">
+      </div>
+      <div class="auth-err" id="err-forgot"></div>
+      <div class="auth-ok" id="ok-forgot" style="display:none"></div>
+      <button type="submit" class="abtn">Отправить ссылку</button>
+      <button type="button" class="auth-link" id="btn-back-login">← Назад</button>
+    </form>
+
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+</body>
+</html>
