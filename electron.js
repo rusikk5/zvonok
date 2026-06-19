@@ -72,6 +72,7 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('did-navigate', (_e, url) => {
+    if (!mainWindow) return;
     prevBounds = null;
     dragState  = null;
     if (url.includes('/app')) {
@@ -187,10 +188,22 @@ if (!gotLock) {
       autoUpdater.autoDownload = true;
       autoUpdater.autoInstallOnAppQuit = true;
 
-      let updateFound = false;
+      let launched = false;
+      function launchMain() {
+        if (launched) return;
+        launched = true;
+        if (splashWin && !splashWin.isDestroyed()) {
+          splashWin.close();
+          splashWin = null;
+        }
+        createWindow();
+        mainWindow.loadURL(PROD_SERVER_URL);
+      }
+
+      // Timeout: if update check takes >8s, just launch
+      const updateTimeout = setTimeout(() => launchMain(), 8000);
 
       autoUpdater.on('update-available', () => {
-        updateFound = true;
         setSplashMsg('Нашёл обновление, скачиваю…');
       });
 
@@ -199,34 +212,26 @@ if (!gotLock) {
       });
 
       autoUpdater.on('update-downloaded', () => {
+        clearTimeout(updateTimeout);
         setSplashMsg('Устанавливаю обновление…');
         setTimeout(() => autoUpdater.quitAndInstall(true, true), 1500);
       });
 
       autoUpdater.on('update-not-available', () => {
+        clearTimeout(updateTimeout);
         launchMain();
       });
 
       autoUpdater.on('error', () => {
-        // If update check fails, just launch normally
+        clearTimeout(updateTimeout);
         launchMain();
       });
 
       try {
         await autoUpdater.checkForUpdates();
-        // If no update found, update-not-available fires launchMain()
-        // If update found, update-downloaded fires restart
       } catch {
+        clearTimeout(updateTimeout);
         launchMain();
-      }
-
-      function launchMain() {
-        if (splashWin && !splashWin.isDestroyed()) {
-          splashWin.close();
-          splashWin = null;
-        }
-        createWindow();
-        mainWindow.loadURL(PROD_SERVER_URL);
       }
 
     } else {
