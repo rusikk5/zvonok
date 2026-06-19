@@ -84,15 +84,21 @@ function nameColor(user) {
   return NAME_PALETTE[Math.abs(h) % NAME_PALETTE.length];
 }
 
+function _avaErr(el, bg, fs, letter) {
+  const d = document.createElement('div');
+  d.className = 'def-ava';
+  d.style.cssText = 'background:' + bg + ';font-size:' + fs + 'px';
+  d.textContent = letter;
+  el.replaceWith(d);
+}
 function avatarHTML(user, size = 36) {
   const name   = user.name || user.username || '?';
   const letter = name.charAt(0).toUpperCase();
   const fs     = Math.floor(size / 3);
   const bg     = strColor(user.username || user.id);
-  const fallback = `this.outerHTML='<div class="def-ava" style="background:${bg};font-size:${fs}px">${letter}</div>'`;
   if (user.avatar && user.avatar !== 'default') {
-    const src = user.avatar + (user.avatar.startsWith('/uploads/') ? `?v=${Date.now()}` : '');
-    return `<img src="${src}" alt="${letter}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="${fallback}">`;
+    const src = user.avatar + (user.avatar.startsWith('/uploads/') ? '?v=' + Date.now() : '');
+    return `<img src="${src}" alt="${letter}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="_avaErr(this,'${bg}',${fs},'${letter}')">`;
   }
   return `<div class="def-ava" style="background:${bg};font-size:${fs}px">${letter}</div>`;
 }
@@ -135,10 +141,13 @@ async function _loadSnd(name) {
 }
 function _playSnd(name) {
   _loadSnd(name).then(buf => {
-    const ctx = new AudioContext();
-    const src = ctx.createBufferSource();
+    const ctx  = new AudioContext();
+    const src  = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.35;
     src.buffer = buf;
-    src.connect(ctx.destination);
+    src.connect(gain);
+    gain.connect(ctx.destination);
     src.start();
     src.onended = () => ctx.close();
   }).catch(() => {});
