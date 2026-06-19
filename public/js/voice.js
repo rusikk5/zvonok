@@ -95,7 +95,14 @@ class VoiceEngine {
   }
 
   _makePeer(socketId, userId) {
-    const pc = new RTCPeerConnection({ iceServers: [] });
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+      ]
+    });
 
     if (this.localStream) {
       this.localStream.getTracks().forEach(t => pc.addTrack(t, this.localStream));
