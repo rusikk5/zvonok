@@ -1,6 +1,6 @@
 {
   "name": "zvonok",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Голосовое приложение для своих",
   "main": "electron.js",
   "scripts": {
@@ -51,8 +51,9 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
-      "oneClick": true,
+      "oneClick": false,
       "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
