@@ -19,6 +19,9 @@ class VoiceEngine {
     this.onUserLeft   = null;
     this.onUserJoined = null;
     this.onCameraChange = null;
+
+    this.noiseSuppression = localStorage.getItem('zvonok_noise') !== 'false';
+    this.noiseThreshold   = parseInt(localStorage.getItem('zvonok_threshold') || '10', 10);
   }
 
   init(socket, userId) {
@@ -65,13 +68,15 @@ class VoiceEngine {
 
   async join(roomId) {
     this.roomId = roomId;
-    const constraints = {
-      audio: this.micId ? { deviceId: { exact: this.micId } } : true,
-      video: false,
+    const audioOpts = {
+      noiseSuppression: this.noiseSuppression,
+      echoCancellation: true,
+      autoGainControl:  true,
+      ...(this.micId ? { deviceId: { exact: this.micId } } : {}),
     };
-    this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    this.localStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts, video: false });
     this._watchVolume(this.localStream, (v) => {
-      if (this.onSpeaking) this.onSpeaking(this.myUserId, v > 10 && !this.muted);
+      if (this.onSpeaking) this.onSpeaking(this.myUserId, v > this.noiseThreshold && !this.muted);
     });
     this.socket.emit('voice:join', { roomId });
   }
@@ -122,7 +127,7 @@ class VoiceEngine {
       if (e.track.kind === 'audio') {
         audio.srcObject = e.streams[0];
         this._watchVolume(e.streams[0], (v) => {
-          if (this.onSpeaking) this.onSpeaking(userId, v > 10);
+          if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
         });
       }
     };
@@ -194,6 +199,17 @@ class VoiceEngine {
     }
     this.cameraEnabled = false;
     if (this.onCameraChange) this.onCameraChange(false, null);
+  }
+
+  async setNoiseSuppression(enabled) {
+    this.noiseSuppression = enabled;
+    localStorage.setItem('zvonok_noise', enabled);
+    if (this.roomId) { const r = this.roomId; this.leave(); await this.join(r); }
+  }
+
+  setSensitivity(threshold) {
+    this.noiseThreshold = threshold;
+    localStorage.setItem('zvonok_threshold', threshold);
   }
 
   async changeMic(deviceId) {

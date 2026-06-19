@@ -587,6 +587,39 @@ body:not(.auth-body){background:#0b0e11}
 .mp-btn.danger{background:rgba(218,55,60,0.10);color:var(--live)}
 .mp-btn.danger:hover{background:rgba(218,55,60,0.18)}
 
+/* ─── DM Call Overlay ─────────────────────────────────────────────────────── */
+.dm-call-ov{position:fixed;inset:0;z-index:2500;background:rgba(8,8,16,0.92);backdrop-filter:blur(18px);display:flex;align-items:center;justify-content:center}
+.dm-call-ov.hidden{display:none}
+.dm-call-inner{display:flex;flex-direction:column;align-items:center;gap:36px}
+.dm-call-top{text-align:center}
+.dm-call-phase{font-size:1.1rem;font-weight:600;color:rgba(255,255,255,0.8)}
+.dm-call-timer{font-size:.85rem;color:rgba(255,255,255,0.5);margin-top:6px}
+.dm-call-avatars{display:flex;gap:72px;align-items:center}
+.dm-call-user{display:flex;flex-direction:column;align-items:center;gap:14px}
+.dmc-ava-wrap{position:relative;width:100px;height:100px}
+.dmc-ava{width:100px;height:100px;border-radius:50%;overflow:hidden;background:#2b2d31}
+.dmc-ava img,.dmc-ava .def-ava{width:100px!important;height:100px!important;border-radius:50%!important;font-size:2.2rem!important}
+.dmc-ring{position:absolute;inset:-5px;border-radius:50%;border:3px solid transparent;pointer-events:none;transition:border-color .15s,box-shadow .15s}
+.dm-call-user.speaking .dmc-ring{border-color:#23a55a;box-shadow:0 0 0 3px rgba(35,165,90,0.3);animation:dmc-pulse 1.4s ease-in-out infinite}
+@keyframes dmc-pulse{0%,100%{box-shadow:0 0 0 3px rgba(35,165,90,0.3)}50%{box-shadow:0 0 0 9px rgba(35,165,90,0.1)}}
+.dmc-name{color:#f2f3f5;font-size:1rem;font-weight:600;text-align:center;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dm-call-controls{display:flex;gap:20px;align-items:center}
+.dmc-btn{width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;display:flex;align-items:center;justify-content:center;transition:background .15s,transform .1s;flex-shrink:0}
+.dmc-btn:hover{background:rgba(255,255,255,0.22);transform:scale(1.07)}
+.dmc-btn.danger{background:#da373c}
+.dmc-btn.danger:hover{background:#b52d30}
+.dmc-btn.muted{background:#da373c}
+.dmc-btn.active{background:#23a55a}
+.dmc-audio-panel{background:#1e1f22;border-radius:14px;padding:18px 22px;color:#dbdee1;display:flex;flex-direction:column;gap:16px;min-width:270px;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+.dmc-ap-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.88rem}
+.tog{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0}
+.tog-slider{position:absolute;cursor:pointer;inset:0;background:#4f545c;border-radius:22px;transition:.2s}
+.tog-slider:before{content:"";position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.tog input:checked + .tog-slider{background:#23a55a}
+.tog input:checked + .tog-slider:before{transform:translateX(18px)}
+input[type=range]{accent-color:#5865f2;cursor:pointer}
+
 /* ─── Входящий звонок ─────────────────────────────────────────────────────── */
 .call-ring{position:fixed;top:24px;right:24px;z-index:3000;animation:ring-in .3s cubic-bezier(.34,1.56,.64,1)}
 @keyframes ring-in{from{opacity:0;transform:translateY(-20px) scale(.9)}to{opacity:1;transform:none}}

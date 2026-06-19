@@ -29,6 +29,9 @@ const S = {
   dmMessages:  [],
 
   ringFrom:    null,     // incoming DM call info
+  dmCallWith:  null,     // user we're currently in DM call with
+  dmCallState: null,     // 'calling' | 'connected'
+  dmCallTimeout: null,
   screenSharing: false,
   myStatus:    localStorage.getItem('zvonok_status') || 'online',
   statuses:    new Map(), // userId -> 'online'|'dnd'  (invisible = offline)
@@ -320,7 +323,7 @@ function setupSocket() {
   });
 
   S.socket.on('dm:ring', ({ from }) => {
-    if (S.myStatus === 'dnd') return; // не беспокоить
+    if (S.myStatus === 'dnd') return;
     S.ringFrom = from;
     playRingSound();
     $('ring-ava').innerHTML = `<div style="width:60px;height:60px;border-radius:50%;overflow:hidden">${avatarHTML(from, 60)}</div>`;
@@ -328,13 +331,29 @@ function setupSocket() {
     $('call-ring').classList.remove('hidden');
   });
 
+  S.socket.on('dm:ring:cancelled', () => {
+    $('call-ring').classList.add('hidden');
+    S.ringFrom = null;
+  });
+
   S.socket.on('dm:ring:accepted', ({ from }) => {
-    toast(`${from.name} принял звонок`, 'success');
-    joinDMVoice(from.id);
+    clearTimeout(S.dmCallTimeout);
+    joinDMVoice(from);
   });
 
   S.socket.on('dm:ring:declined', ({ from }) => {
-    toast(`${from.name} отклонил звонок`);
+    clearTimeout(S.dmCallTimeout);
+    $('dm-call-ov').classList.add('hidden');
+    S.dmCallWith = null;
+    S.dmCallState = null;
+    toast(`${from.name || from.username} отклонил звонок`);
+  });
+
+  S.socket.on('dm:call:ended', ({ fromId }) => {
+    if (S.dmCallWith && S.dmCallWith.id === fromId) {
+      endDMCall(false);
+      toast('Звонок завершён');
+    }
   });
 }
 
@@ -344,6 +363,14 @@ function onSpeaking(userId, speaking) {
   document.querySelectorAll(`.vp-item[data-uid="${userId}"], .member[data-uid="${userId}"], .vuser[data-uid="${userId}"]`).forEach(el => {
     el.classList.toggle('speaking', speaking);
   });
+  // Update DM call overlay speaking rings
+  if (S.dmCallState === 'connected') {
+    if (userId === S.me.id) {
+      $('dmc-me')?.classList.toggle('speaking', speaking);
+    } else if (S.dmCallWith && userId === S.dmCallWith.id) {
+      $('dmc-them')?.classList.toggle('speaking', speaking);
+    }
+  }
 }
 
 function onVoiceLeft(userId) {
@@ -555,17 +582,78 @@ function sendDM() {
 }
 
 function callDM(userId) {
+  const target = S.dmWith;
+  S.dmCallWith  = target;
+  S.dmCallState = 'calling';
   S.socket.emit('dm:ring', { toId: userId });
-  toast('Звоним…');
+  showDMCallOverlay(target, 'calling');
+  S.dmCallTimeout = setTimeout(() => {
+    if (S.dmCallState === 'calling') {
+      S.socket.emit('dm:ring:cancel', { toId: userId });
+      $('dm-call-ov').classList.add('hidden');
+      S.dmCallWith = null;
+      S.dmCallState = null;
+      toast('Нет ответа');
+    }
+  }, 30000);
 }
 
-function joinDMVoice(otherUserId) {
-  const dmRoomId = 'dm:' + [S.me.id, otherUserId].sort().join('_');
+function joinDMVoice(otherUser) {
+  S.dmCallWith = otherUser;
+  const dmRoomId = 'dm:' + [S.me.id, otherUser.id].sort().join('_');
   S.voice.join(dmRoomId).then(() => {
     $('voice-status').classList.remove('hidden');
     $('vs-room-name').textContent = 'Личный звонок';
     startVoiceTimer();
+    showDMCallOverlay(otherUser, 'connected');
   }).catch(e => toast('Ошибка микрофона: ' + e.message, 'error'));
+}
+
+function showDMCallOverlay(other, state) {
+  S.dmCallState = state;
+  $('dmc-them-ava').innerHTML = avatarHTML(other, 100);
+  $('dmc-them-name').textContent = other.name || other.username;
+  if (state === 'calling') {
+    $('dmc-phase').textContent = 'Звоним...';
+    $('dmc-timer').classList.add('hidden');
+    $('dmc-me').style.display = 'none';
+  } else {
+    $('dmc-phase').textContent = 'Личный звонок';
+    $('dmc-timer').classList.remove('hidden');
+    $('dmc-me').style.display = 'flex';
+    $('dmc-me-ava').innerHTML = avatarHTML(S.me, 100);
+    $('dmc-me-name').textContent = S.me.name || S.me.username;
+    updateDMCallMuteBtn();
+  }
+  $('dmc-audio-panel').classList.add('hidden');
+  $('dm-call-ov').classList.remove('hidden');
+}
+
+function updateDMCallMuteBtn() {
+  const btn = $('dmc-btn-mute');
+  if (!btn) return;
+  btn.classList.toggle('muted', S.muted);
+  btn.innerHTML = S.muted
+    ? `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>`
+    : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>`;
+}
+
+function endDMCall(notifyOther = true) {
+  clearTimeout(S.dmCallTimeout);
+  if (notifyOther && S.dmCallWith) {
+    S.socket.emit('dm:call:end', { toId: S.dmCallWith.id });
+  }
+  S.voice.leave();
+  S.voiceUsers.clear();
+  S.voiceRoom = S.voiceRoom.filter(id => id !== S.me.id);
+  stopVoiceTimer();
+  S.muted = false;
+  updateMuteBtn();
+  $('voice-status').classList.add('hidden');
+  $('dm-call-ov').classList.add('hidden');
+  $('dmc-audio-panel').classList.add('hidden');
+  S.dmCallWith  = null;
+  S.dmCallState = null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -639,6 +727,10 @@ function startVoiceTimer() {
     const sec = s % 60;
     const el = $('vac-timer');
     if (el) el.textContent = `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    const dmEl = $('dmc-timer');
+    if (dmEl) dmEl.textContent = h > 0
+      ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+      : `${m}:${String(sec).padStart(2,'0')}`;
   }, 1000);
 }
 
@@ -1204,16 +1296,60 @@ function setupUI() {
   // Incoming call
   $('btn-ring-accept').addEventListener('click', () => {
     if (!S.ringFrom) return;
-    S.socket.emit('dm:ring:accept', { toId: S.ringFrom.id });
-    joinDMVoice(S.ringFrom.id);
+    const from = S.ringFrom;
+    S.socket.emit('dm:ring:accept', { toId: from.id });
     $('call-ring').classList.add('hidden');
     S.ringFrom = null;
+    joinDMVoice(from);
   });
   $('btn-ring-decline').addEventListener('click', () => {
     if (S.ringFrom) S.socket.emit('dm:ring:decline', { toId: S.ringFrom.id });
     $('call-ring').classList.add('hidden');
     S.ringFrom = null;
   });
+
+  // DM call overlay buttons
+  $('dmc-btn-end').addEventListener('click', () => {
+    if (S.dmCallState === 'calling') {
+      clearTimeout(S.dmCallTimeout);
+      if (S.dmCallWith) S.socket.emit('dm:ring:cancel', { toId: S.dmCallWith.id });
+      $('dm-call-ov').classList.add('hidden');
+      S.dmCallWith = null;
+      S.dmCallState = null;
+    } else {
+      endDMCall(true);
+    }
+  });
+  $('dmc-btn-mute').addEventListener('click', () => {
+    S.muted = !S.muted;
+    S.voice.setMuted(S.muted);
+    updateMuteBtn();
+    updateDMCallMuteBtn();
+  });
+  $('dmc-btn-settings').addEventListener('click', (e) => {
+    e.stopPropagation();
+    $('dmc-audio-panel').classList.toggle('hidden');
+  });
+  // Init audio settings from saved values
+  const _savedNoise = localStorage.getItem('zvonok_noise') !== 'false';
+  const _savedThres = parseInt(localStorage.getItem('zvonok_threshold') || '10', 10);
+  $('dmc-noise-chk').checked = _savedNoise;
+  $('dmc-sens').value = _savedThres;
+  $('dmc-sens-val').textContent = _savedThres;
+  $('dmc-noise-chk').addEventListener('change', async (e) => {
+    await S.voice.setNoiseSuppression(e.target.checked);
+  });
+  $('dmc-sens').addEventListener('input', (e) => {
+    const v = parseInt(e.target.value, 10);
+    $('dmc-sens-val').textContent = v;
+    S.voice.setSensitivity(v);
+  });
+  document.addEventListener('click', () => {
+    if (!$('dmc-audio-panel').classList.contains('hidden')) {
+      $('dmc-audio-panel').classList.add('hidden');
+    }
+  });
+  $('dmc-audio-panel').addEventListener('click', e => e.stopPropagation());
 
   // Settings
   $('btn-settings').addEventListener('click', openSettings);

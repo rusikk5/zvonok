@@ -574,6 +574,16 @@ io.on('connection', socket => {
     if (targetSock) io.to(targetSock).emit('dm:ring:declined', { from: getUser(uid) });
   });
 
+  socket.on('dm:ring:cancel', ({ toId }) => {
+    const targetSock = onlineUsers.get(toId);
+    if (targetSock) io.to(targetSock).emit('dm:ring:cancelled');
+  });
+
+  socket.on('dm:call:end', ({ toId }) => {
+    const targetSock = onlineUsers.get(toId);
+    if (targetSock) io.to(targetSock).emit('dm:call:ended', { fromId: uid });
+  });
+
   // ── Voice signaling ───────────────────────────────────────────
   socket.on('voice:join', ({ roomId }) => {
     // Allow both normal rooms and DM voice rooms

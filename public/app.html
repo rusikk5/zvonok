@@ -295,6 +295,47 @@
   </div>
 </div>
 
+<!-- ═══ DM Звонок ═════════════════════════════════════════════ -->
+<div class="dm-call-ov hidden" id="dm-call-ov">
+  <div class="dm-call-inner">
+    <div class="dm-call-top">
+      <div class="dm-call-phase" id="dmc-phase">Звоним...</div>
+      <div class="dm-call-timer hidden" id="dmc-timer">0:00</div>
+    </div>
+    <div class="dm-call-avatars">
+      <div class="dm-call-user" id="dmc-me" style="display:none">
+        <div class="dmc-ava-wrap"><div class="dmc-ava" id="dmc-me-ava"></div><div class="dmc-ring"></div></div>
+        <div class="dmc-name" id="dmc-me-name"></div>
+      </div>
+      <div class="dm-call-user" id="dmc-them">
+        <div class="dmc-ava-wrap"><div class="dmc-ava" id="dmc-them-ava"></div><div class="dmc-ring"></div></div>
+        <div class="dmc-name" id="dmc-them-name"></div>
+      </div>
+    </div>
+    <div class="dm-call-controls">
+      <button class="dmc-btn" id="dmc-btn-mute" title="Микрофон">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      </button>
+      <button class="dmc-btn danger" id="dmc-btn-end" title="Завершить">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.45-2.98"/><path d="M2 2l20 20"/></svg>
+      </button>
+      <button class="dmc-btn" id="dmc-btn-settings" title="Настройки звука">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+      </button>
+    </div>
+    <div class="dmc-audio-panel hidden" id="dmc-audio-panel">
+      <div class="dmc-ap-row">
+        <span>Шумоподавление</span>
+        <label class="tog"><input type="checkbox" id="dmc-noise-chk" checked><span class="tog-slider"></span></label>
+      </div>
+      <div class="dmc-ap-row">
+        <span>Чувствительность: <b id="dmc-sens-val">10</b></span>
+        <input type="range" id="dmc-sens" min="1" max="30" value="10" style="width:110px">
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ Входящий звонок ════════════════════════════════════════ -->
 <div class="call-ring hidden" id="call-ring">
   <div class="call-ring-inner">
