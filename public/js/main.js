@@ -580,7 +580,13 @@ async function joinVoice() {
     $('voice-status').classList.remove('hidden');
     $('vs-room-name').textContent = 'Голосовой чат / ' + (S.room?.name || '');
     startVoiceTimer();
+    // Optimistically add self to voiceRoom so we appear immediately
+    if (!S.voiceRoom.includes(S.me.id)) {
+      S.voiceRoom = [...S.voiceRoom, S.me.id];
+      S.voiceUsers.set(S.me.id, { muted: S.muted, speaking: false });
+    }
     renderVoiceCard();
+    renderMembers();
   } catch (e) {
     toast('Не удалось получить доступ к микрофону: ' + e.message, 'error');
   }
