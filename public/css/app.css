@@ -337,6 +337,10 @@ body:not(.auth-body){background:#0b0e11}
 .ch-name{font-size:.9rem;font-weight:700;flex:1;color:#f2f3f5}
 
 .chat-scroll{flex:1;overflow-y:auto;min-height:0;padding:12px 16px}
+#update-banner{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#23a55a;color:#fff;padding:10px 16px;border-radius:8px;display:flex;align-items:center;gap:10px;z-index:9999;font-size:.85rem;box-shadow:0 4px 16px #0006;animation:upd-slide .3s ease}
+#update-banner button{background:#fff2;border:none;color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:.82rem;font-weight:600}
+#update-banner button:hover{background:#fff3}
+@keyframes upd-slide{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .sys-msg{text-align:center;color:var(--ink-faint);font-size:.78rem;padding:6px 0;margin:2px 0;display:flex;align-items:center;gap:8px}.sys-msg::before,.sys-msg::after{content:'';flex:1;height:1px;background:var(--ink-faint);opacity:.3}
 .chat-scroll::-webkit-scrollbar{width:5px}
 .chat-scroll::-webkit-scrollbar-thumb{background:#1a1b1e;border-radius:4px}

@@ -179,66 +179,48 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(async () => {
+  let updater = null;
+
+  ipcMain.on('update:install', () => updater?.quitAndInstall(true, true));
+
+  ipcMain.handle('update:check', async () => {
+    if (!updater) return { error: 'Автообновление недоступно' };
+    try {
+      const result = await updater.checkForUpdates();
+      return { version: result?.updateInfo?.version };
+    } catch (e) {
+      return { error: e.message };
+    }
+  });
+
+  app.whenReady().then(() => {
+    // Launch immediately — no splash, no waiting
+    createWindow();
+
     if (app.isPackaged) {
-      // ── Production: connect to deployed server, check updates ──
-      const { autoUpdater } = require('electron-updater');
-      createSplash('Проверяю обновления…');
+      mainWindow.loadURL(PROD_SERVER_URL);
 
-      autoUpdater.autoDownload = true;
-      autoUpdater.autoInstallOnAppQuit = true;
+      // Check for updates in background after app is loaded
+      setTimeout(async () => {
+        try {
+          const { autoUpdater } = require('electron-updater');
+          updater = autoUpdater;
+          autoUpdater.autoDownload = true;
+          autoUpdater.autoInstallOnAppQuit = true;
+          autoUpdater.logger = null;
 
-      let launched = false;
-      function launchMain() {
-        if (launched) return;
-        launched = true;
-        if (splashWin && !splashWin.isDestroyed()) {
-          splashWin.close();
-          splashWin = null;
-        }
-        createWindow();
-        mainWindow.loadURL(PROD_SERVER_URL);
-      }
+          autoUpdater.on('update-downloaded', ({ version }) => {
+            mainWindow?.webContents.send('update:ready', version);
+          });
 
-      // Timeout: if update check takes >8s, just launch
-      const updateTimeout = setTimeout(() => launchMain(), 8000);
-
-      autoUpdater.on('update-available', () => {
-        setSplashMsg('Нашёл обновление, скачиваю…');
-      });
-
-      autoUpdater.on('download-progress', ({ percent }) => {
-        setSplashProgress(percent);
-      });
-
-      autoUpdater.on('update-downloaded', () => {
-        clearTimeout(updateTimeout);
-        setSplashMsg('Устанавливаю обновление…');
-        setTimeout(() => autoUpdater.quitAndInstall(true, true), 1500);
-      });
-
-      autoUpdater.on('update-not-available', () => {
-        clearTimeout(updateTimeout);
-        launchMain();
-      });
-
-      autoUpdater.on('error', () => {
-        clearTimeout(updateTimeout);
-        launchMain();
-      });
-
-      try {
-        await autoUpdater.checkForUpdates();
-      } catch {
-        clearTimeout(updateTimeout);
-        launchMain();
-      }
+          await autoUpdater.checkForUpdates();
+        } catch {}
+      }, 4000);
 
     } else {
       // ── Development: start local server ──────────────────────
       process.env.ZVONOK_DATA = path.join(app.getPath('userData'), 'data');
       require('./server.js');
-      createWindow();
     }
   });
 

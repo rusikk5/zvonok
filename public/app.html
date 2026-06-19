@@ -563,6 +563,18 @@ if (window.electronAPI) {
   document.querySelector('.traffic .g').addEventListener('click', () => window.electronAPI.maximize());
   window.addEventListener('focus', () => win.classList.remove('win-minimizing'));
 
+  // Update notification
+  window.electronAPI.onUpdateReady((version) => {
+    const banner = document.createElement('div');
+    banner.id = 'update-banner';
+    banner.innerHTML = `
+      <span>Доступно обновление${version ? ' ' + version : ''} — скачано и готово к установке</span>
+      <button onclick="window.electronAPI.installUpdate()">Перезапустить</button>
+      <button onclick="this.parentElement.remove()" style="background:transparent;color:var(--ink-dim);padding:4px 8px">✕</button>
+    `;
+    document.body.appendChild(banner);
+  });
+
   // Titlebar drag with Discord-snap
   let _drag = false;
   document.querySelector('.titlebar').addEventListener('mousedown', e => {
