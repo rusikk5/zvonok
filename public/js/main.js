@@ -205,14 +205,19 @@ function setupSocket() {
   S.voice.onSpeaking   = onSpeaking;
   S.voice.onUserLeft   = onVoiceLeft;
   S.voice.onUserJoined = (uid) => {
-    if (!S.voiceUsers.has(uid)) S.voiceUsers.set(uid, { muted: false, speaking: false });
-    playJoinSound();
+    const isNew = !S.voiceUsers.has(uid);
+    if (isNew) S.voiceUsers.set(uid, { muted: false, speaking: false });
+    if (isNew && !S.dmCallState) playJoinSound(); // skip sound for DM calls (overlay handles it)
     renderVoiceCard();
     renderMembers();
   };
 
   S.socket.on('connect', () => {
     if (S.myStatus !== 'online') S.socket.emit('set:status', S.myStatus);
+    // Socket reconnected — server cleared our voice state, sync client
+    if (S.voice.roomId && !S.dmCallState) {
+      leaveVoice();
+    }
   });
 
   S.socket.on('connect_error', (e) => {
@@ -260,13 +265,14 @@ function setupSocket() {
   });
 
   S.socket.on('voice:state', ({ roomId, users }) => {
-    if (roomId !== S.roomId) return;
-    const prevUsers = [...S.voiceRoom];
+    // Accept for the room we're viewing OR the room we're in voice
+    if (roomId !== S.roomId && roomId !== S.voice.roomId) return;
     S.voiceRoom = users;
     for (const uid of S.voiceUsers.keys()) {
       if (!users.includes(uid)) {
         S.voiceUsers.delete(uid);
-        if (uid !== S.me.id) playLeaveSound();
+        // Play leave sound only when NOT in voice (voice:left handles it for voice members)
+        if (uid !== S.me.id && !S.voice.roomId) playLeaveSound();
       }
     }
     users.forEach(uid => {
@@ -374,7 +380,7 @@ function onSpeaking(userId, speaking) {
 }
 
 function onVoiceLeft(userId) {
-  playLeaveSound();
+  if (!S.dmCallState) playLeaveSound();
   S.voiceUsers.delete(userId);
   renderVoiceCard();
   renderMembers();
