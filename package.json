@@ -1,6 +1,6 @@
 {
   "name": "zvonok",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Голосовое приложение для своих",
   "main": "electron.js",
   "scripts": {
