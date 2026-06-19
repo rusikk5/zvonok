@@ -230,7 +230,9 @@ body:not(.auth-body){background:#0b0e11}
   transition:background .1s;cursor:pointer;
 }
 .vuser:hover{background:#2b2d31}
-.vuser.speaking .pix{box-shadow:0 0 0 2px #23a55a}
+.vuser .pix{border-radius:50%!important}
+.vuser .pix img,.vuser .pix .def-ava{border-radius:50%!important}
+.vuser.speaking .pix{box-shadow:0 0 0 2px #23a55a;border-radius:50%}
 .vuser .nick{font-size:.82rem;color:var(--ink-dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vuser:hover .nick{color:#dbdee1}
 .live-badge{background:var(--live);color:#fff;font-size:.60rem;font-weight:600;border-radius:3px;padding:1px 5px;letter-spacing:.03em;flex-shrink:0;text-transform:uppercase}

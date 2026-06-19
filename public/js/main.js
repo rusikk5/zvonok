@@ -669,7 +669,7 @@ function renderVoiceCard() {
     const isLive = uid === S.me?.id && S.screenSharing;
     return `
       <div class="vuser ${vs.speaking ? 'speaking' : ''}" data-uid="${uid}" style="cursor:pointer" onclick="openMiniProfile('${uid}', this)">
-        <span class="pix" style="width:26px;height:26px;border-radius:7px">${avatarHTML(member, 26)}</span>
+        <span class="pix" style="width:28px;height:28px">${avatarHTML(member, 28)}</span>
         <span class="nick" style="color:${nameColor(member)}">${escHtml(member.name || member.username)}</span>
         ${isLive ? '<span class="live-badge">В эфире</span>' : ''}
         ${vs.muted ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="opacity:.5;flex-shrink:0;margin-left:auto"><line x1="2" y1="2" x2="22" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><line x1="12" y1="19" x2="12" y2="23"/></svg>' : ''}
