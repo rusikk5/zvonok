@@ -595,6 +595,7 @@ async function joinVoice() {
 function leaveVoice() {
   S.voice.leave();
   S.voiceUsers.clear();
+  S.voiceRoom = S.voiceRoom.filter(id => id !== S.me.id);
   $('btn-voice').textContent = 'Войти';
   $('btn-voice').classList.remove('in-voice');
   $('voice-status').classList.add('hidden');
