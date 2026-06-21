@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
 const path = require('path');
 const { PROD_SERVER_URL } = require('./config');
 
@@ -113,10 +113,20 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // useSystemPicker: Windows 11 native picker handles source selection and stream creation
-  mainWindow.webContents.session.setDisplayMediaRequestHandler((_req, callback) => {
-    callback({});
-  }, { useSystemPicker: true });
+  // Screen share handler: try getSources inside handler context (different from IPC context)
+  mainWindow.webContents.session.setDisplayMediaRequestHandler(async (_req, callback) => {
+    try {
+      // thumbnailSize 0x0 — skip thumbnail generation, just enumerate sources
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 0, height: 0 },
+      });
+      const screen = sources.find(s => s.id.startsWith('screen:')) || sources[0];
+      if (screen) { callback({ video: screen }); return; }
+    } catch {}
+    // getSources returned nothing — renderer will fall back to getUserMedia
+    callback({ video: null });
+  });
 }
 
 // ── Window controls ──────────────────────────────────────────

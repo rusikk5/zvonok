@@ -345,9 +345,23 @@ class VoiceEngine {
         audio: !!audio,
       });
     } catch(e) {
-      if (e.name === 'NotAllowedError') return; // user cancelled picker
-      if (this.onScreenShareError) this.onScreenShareError(e.message || e.name || String(e));
-      return;
+      if (e.name === 'NotAllowedError') return; // user cancelled
+      // Fallback: legacy Electron chromeMediaSource (captures primary screen, no picker needed)
+      try {
+        this.screenStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              maxWidth: width, maxHeight: height, maxFrameRate: fps,
+            }
+          },
+          audio: false,
+        });
+      } catch(e2) {
+        if (this.onScreenShareError)
+          this.onScreenShareError('Нет доступа к экрану. Проверь: Параметры Windows → Конфиденциальность → Запись экрана');
+        return;
+      }
     }
 
     const track = this.screenStream.getVideoTracks()[0];
