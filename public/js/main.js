@@ -205,7 +205,7 @@ function setupSocket() {
   S.voice.onUserJoined = (uid) => {
     const isNew = !S.voiceUsers.has(uid);
     if (isNew) S.voiceUsers.set(uid, { muted: false, speaking: false });
-    if (isNew && !S.dmCallState) playJoinSound(); // skip sound for DM calls (overlay handles it)
+    if (isNew && !S.dmCallState && S.voice.roomId) playJoinSound();
     renderVoiceCard();
     renderMembers();
   };
@@ -269,8 +269,7 @@ function setupSocket() {
     for (const uid of S.voiceUsers.keys()) {
       if (!users.includes(uid)) {
         S.voiceUsers.delete(uid);
-        // Play leave sound only when NOT in voice (voice:left handles it for voice members)
-        if (uid !== S.me.id && !S.voice.roomId) playLeaveSound();
+        // Leave sound is handled by voice.onUserLeft when you're in the same channel
       }
     }
     users.forEach(uid => {
@@ -387,7 +386,7 @@ function onSpeaking(userId, speaking) {
 }
 
 function onVoiceLeft(userId) {
-  if (!S.dmCallState) playLeaveSound();
+  if (!S.dmCallState && S.voice.roomId) playLeaveSound();
   S.voiceUsers.delete(userId);
   renderVoiceCard();
   renderMembers();
@@ -1734,6 +1733,8 @@ function setupUI() {
     $('vs-sharing').classList.toggle('hidden', !sharing);
     $('screen-card').classList.toggle('hidden', !sharing);
   };
+
+  S.voice.onScreenShareError = (msg) => toast('Демонстрация экрана: ' + msg, 'error');
 
   // Wire voice.onRemoteScreen callback
   S.voice.onRemoteScreen = (userId, stream) => {

@@ -26,8 +26,9 @@ class VoiceEngine {
     this.onUserJoined   = null;
     this.onCameraChange = null;
     this.onInputLevel   = null;
-    this.onScreenShare  = null;  // (isSharing, stream | null)
-    this.onRemoteScreen = null;  // (userId, stream | null)
+    this.onScreenShare      = null;  // (isSharing, stream | null)
+    this.onRemoteScreen     = null;  // (userId, stream | null)
+    this.onScreenShareError = null;  // (message) => void
 
     this.noiseSuppression = localStorage.getItem('zvonok_noise')    !== 'false';
     this.noiseThreshold   = parseInt(localStorage.getItem('zvonok_threshold') || '12', 10);
@@ -335,18 +336,19 @@ class VoiceEngine {
   }
 
   // ── Screen share ──────────────────────────────────────────
-  async startScreenShare({ sourceId, width, height, fps, audio }) {
+  async startScreenShare({ width, height, fps, audio }) {
     if (this.screenStream) return;
 
     try {
-      if (window.electronAPI?.selectScreenSource && sourceId)
-        await window.electronAPI.selectScreenSource(sourceId);
-
       this.screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps } },
         audio: !!audio,
       });
-    } catch { return; }
+    } catch(e) {
+      if (e.name !== 'NotAllowedError') // user cancelled — don't toast
+        if (this.onScreenShareError) this.onScreenShareError(e.message || String(e));
+      return;
+    }
 
     const track = this.screenStream.getVideoTracks()[0];
     if (!track) { this.screenStream.getTracks().forEach(t => t.stop()); this.screenStream = null; return; }

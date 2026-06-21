@@ -640,7 +640,7 @@ if (window.electronAPI) {
   window.addEventListener('focus', () => win.classList.remove('win-minimizing'));
 
   // Update notification
-  window.electronAPI.onUpdateReady((version) => {
+  if (typeof window.electronAPI?.onUpdateReady === 'function') window.electronAPI.onUpdateReady((version) => {
     const banner = document.createElement('div');
     banner.id = 'update-banner';
     banner.innerHTML = `

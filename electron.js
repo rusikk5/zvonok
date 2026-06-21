@@ -113,9 +113,9 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // Use Windows native screen/window picker (works on Windows 11 without extra permissions)
-  mainWindow.webContents.session.setDisplayMediaRequestHandler((_req, callback) => {
-    callback({});
+  // useSystemPicker: Windows 11 shows native picker, selected source arrives in request.video
+  mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+    callback({ video: request.video ?? null });
   }, { useSystemPicker: true });
 }
 
