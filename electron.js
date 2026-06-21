@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const { PROD_SERVER_URL } = require('./config');
 
@@ -7,7 +7,6 @@ let mainWindow  = null;
 let prevBounds  = null;
 let dragState   = null;
 let splashWin   = null;
-let _pendingScreenId = null;
 
 // ── Update window (shown during download) ───────────────────────
 function createSplash(msg) {
@@ -114,15 +113,10 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // Allow getDisplayMedia to use desktopCapturer with pre-selected source
+  // Use Windows native screen/window picker (works on Windows 11 without extra permissions)
   mainWindow.webContents.session.setDisplayMediaRequestHandler((_req, callback) => {
-    const pick = _pendingScreenId;
-    _pendingScreenId = null;
-    desktopCapturer.getSources({ types: ['screen', 'window'] }).then(sources => {
-      const src = pick ? (sources.find(s => s.id === pick) || sources[0]) : sources[0];
-      callback({ video: src });
-    }).catch(() => callback({}));
-  });
+    callback({});
+  }, { useSystemPicker: true });
 }
 
 // ── Window controls ──────────────────────────────────────────
@@ -179,27 +173,6 @@ ipcMain.on('win:drag-move', (_e, sx, sy) => {
 ipcMain.on('win:drag-end', () => { dragState = null; });
 
 // ── Screen share ─────────────────────────────────────────────
-ipcMain.handle('screens:get-sources', async () => {
-  const thumbSize = { width: 320, height: 180 };
-  let screens = [], windows = [];
-  try { screens = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: thumbSize }); } catch(e) { console.error('[cap] screens error:', e); }
-  try { windows = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: thumbSize }); } catch(e) { console.error('[cap] windows error:', e); }
-  console.log('[cap] screens:', screens.length, screens.map(s => s.name));
-  console.log('[cap] windows:', windows.length, windows.map(s => s.name));
-  const toObj = (s, isScreen) => {
-    let thumbnail = '';
-    try { thumbnail = s.thumbnail.toDataURL(); } catch {}
-    return { id: s.id, name: s.name, thumbnail, isScreen };
-  };
-  return [
-    ...screens.map(s => toObj(s, true)),
-    ...windows.map(s => toObj(s, false)),
-  ];
-});
-
-ipcMain.handle('screens:select', async (_, sourceId) => {
-  _pendingScreenId = sourceId;
-});
 
 // ── Single instance ──────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();

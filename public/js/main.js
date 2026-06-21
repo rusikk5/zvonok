@@ -1090,71 +1090,8 @@ const COLOR_PRESETS = [
 ];
 
 // ── Screen share picker ───────────────────────────────────────
-let _spSources = [];
-
-async function openScreenPicker() {
-  _spSources = [];
-  const grid  = $('sp-grid');
-  const hint  = $('sp-browser-hint');
-  const btn   = $('btn-sp-share');
-
-  // Reset selection
-  $('sp-tabs').querySelectorAll('.sp-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
-  btn.disabled = false;
-
-  if (window.electronAPI?.getScreenSources) {
-    hint.classList.add('hidden');
-    grid.innerHTML = '<div style="color:var(--ink-faint);text-align:center;padding:24px;grid-column:1/-1">Загружаю...</div>';
-    try {
-      _spSources = await window.electronAPI.getScreenSources();
-    } catch {
-      _spSources = [];
-    }
-    populateScreenGrid('screen');
-  } else {
-    // Browser: no thumbnails, just show hint
-    grid.innerHTML = '';
-    hint.classList.remove('hidden');
-    grid.appendChild(hint);
-    btn.disabled = false;
-  }
-
+function openScreenPicker() {
   showModal('modal-screen');
-}
-
-function populateScreenGrid(type) {
-  const grid = $('sp-grid');
-  const filtered = _spSources.filter(s => type === 'screen' ? s.isScreen : !s.isScreen);
-  if (!filtered.length) {
-    const total   = _spSources.length;
-    const screens = _spSources.filter(s => s.isScreen).length;
-    const wins    = _spSources.filter(s => !s.isScreen).length;
-    grid.innerHTML = `<div style="color:var(--ink-faint);text-align:center;padding:24px;grid-column:1/-1;font-size:.82rem">
-      Нет источников<br>
-      <span style="color:var(--ink-faint);font-size:.72rem">Загружено всего: ${total} (экранов: ${screens}, окон: ${wins})</span>
-    </div>`;
-    return;
-  }
-
-  grid.innerHTML = '';
-  let _selectedId = null;
-  filtered.forEach(src => {
-    const item = document.createElement('div');
-    item.className = 'sp-item';
-    item.dataset.sourceId = src.id;
-    item.innerHTML = `<img src="${src.thumbnail}" alt=""><div class="sp-item-name">${escHtml(src.name)}</div>`;
-    item.addEventListener('click', () => {
-      grid.querySelectorAll('.sp-item').forEach(i => i.classList.remove('selected'));
-      item.classList.add('selected');
-      _selectedId = src.id;
-    });
-    grid.appendChild(item);
-  });
-
-  // Auto-select first
-  if (filtered.length === 1) {
-    grid.querySelector('.sp-item')?.click();
-  }
 }
 
 async function openSettings() {
@@ -1782,24 +1719,13 @@ function setupUI() {
     else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
   });
 
-  // screen share modal: tabs
-  $('sp-tabs').addEventListener('click', (e) => {
-    const tab = e.target.closest('.sp-tab');
-    if (!tab) return;
-    $('sp-tabs').querySelectorAll('.sp-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    populateScreenGrid(tab.dataset.type);
-  });
-
   // screen share modal: share button
   $('btn-sp-share').addEventListener('click', async () => {
     const quality = parseInt($('sp-quality').value, 10);
     const audio   = $('sp-audio').checked;
-    const selectedId = $('sp-grid').querySelector('.sp-item.selected')?.dataset.sourceId || null;
     const dims = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
-
     hideModal('modal-screen');
-    await S.voice.startScreenShare({ sourceId: selectedId, width: dims[0], height: dims[1], fps: dims[2], audio });
+    await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
   });
 
   // Wire voice.onScreenShare callback
