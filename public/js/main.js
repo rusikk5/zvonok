@@ -1128,6 +1128,8 @@ function _spPopulateGrid(type) {
     const item = document.createElement('div');
     item.className = 'sp-item';
     item.dataset.sourceId = src.id;
+    if (src.bounds)    item.dataset.bounds    = JSON.stringify(src.bounds);
+    if (src.allBounds) item.dataset.allBounds = JSON.stringify(src.allBounds);
     const img = src.thumbnail
       ? `<img src="${src.thumbnail}" alt="">`
       : `<div class="sp-item-thumb-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>`;
@@ -1778,20 +1780,24 @@ function setupUI() {
 
   // Screen picker: share button
   $('btn-sp-share').addEventListener('click', async () => {
-    const quality    = parseInt($('sp-quality').value, 10);
-    const audio      = $('sp-audio').checked;
-    const dims       = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
-    const selectedId = $('sp-grid').querySelector('.sp-item.selected')?.dataset.sourceId;
+    const quality = parseInt($('sp-quality').value, 10);
+    const audio   = $('sp-audio').checked;
+    const dims    = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
+    const sel     = $('sp-grid').querySelector('.sp-item.selected');
+    const selId   = sel?.dataset.sourceId;
+    const bounds    = sel?.dataset.bounds    ? JSON.parse(sel.dataset.bounds)    : null;
+    const allBounds = sel?.dataset.allBounds ? JSON.parse(sel.dataset.allBounds) : null;
     hideModal('modal-screen');
 
-    if (selectedId && selectedId !== '__desktop__' && window.electronAPI?.selectScreen) {
-      // Electron: pre-select source, then getDisplayMedia triggers handler
-      await window.electronAPI.selectScreen(selectedId);
+    if (selId && !selId.startsWith('display:') && selId !== '__desktop__' && window.electronAPI?.selectScreen) {
+      await window.electronAPI.selectScreen(selId);
     }
 
     await S.voice.startScreenShare({
       width: dims[0], height: dims[1], fps: dims[2], audio,
-      useDesktop: selectedId === '__desktop__' || !selectedId,
+      sourceId: selId,
+      displayBounds: bounds,
+      allDisplayBounds: allBounds,
     });
   });
 

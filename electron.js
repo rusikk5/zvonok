@@ -135,16 +135,34 @@ function createWindow() {
 
 // ── Screen share IPC ─────────────────────────────────────────
 ipcMain.handle('screen:sources', async () => {
+  // Try full enumeration first (requires Windows Privacy: Screen recording enabled)
   try {
     const [sc, wn] = await Promise.all([
       desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 320, height: 180 } }),
       desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 320, height: 180 } }),
     ]);
-    return [
-      ...sc.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: true  })),
-      ...wn.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: false })),
-    ];
-  } catch { return []; }
+    if (sc.length || wn.length) {
+      return [
+        ...sc.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: true  })),
+        ...wn.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: false })),
+      ];
+    }
+  } catch {}
+
+  // Fallback: enumerate monitors via screen API (no privacy permission needed)
+  const displays   = screen.getAllDisplays();
+  const primaryId  = screen.getPrimaryDisplay().id;
+  const allBounds  = displays.map(d => d.bounds);
+  return displays.map((d, i) => ({
+    id:        `display:${i}`,
+    name:      d.id === primaryId
+                 ? `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height}, основной)`
+                 : `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height})`,
+    thumbnail: '',
+    isScreen:  true,
+    bounds:    d.bounds,
+    allBounds,
+  }));
 });
 
 ipcMain.handle('screen:select', async (_, id) => { _pendingScreenId = id; });
