@@ -180,18 +180,21 @@ ipcMain.on('win:drag-end', () => { dragState = null; });
 
 // ── Screen share ─────────────────────────────────────────────
 ipcMain.handle('screens:get-sources', async () => {
-  const sources = await desktopCapturer.getSources({
-    types: ['screen', 'window'],
-    thumbnailSize: { width: 320, height: 180 },
-    fetchWindowIcons: true,
-  });
-  return sources.map(s => ({
-    id:        s.id,
-    name:      s.name,
+  const thumbSize = { width: 320, height: 180 };
+  const [screens, windows] = await Promise.all([
+    desktopCapturer.getSources({ types: ['screen'], thumbnailSize: thumbSize }),
+    desktopCapturer.getSources({ types: ['window'], thumbnailSize: thumbSize }),
+  ]);
+  const toObj = (s, isScreen) => ({
+    id:       s.id,
+    name:     s.name,
     thumbnail: s.thumbnail.toDataURL(),
-    appIcon:   s.appIcon?.toDataURL() || null,
-    isScreen:  s.id.startsWith('screen:'),
-  }));
+    isScreen,
+  });
+  return [
+    ...screens.map(s => toObj(s, true)),
+    ...windows.map(s => toObj(s, false)),
+  ];
 });
 
 ipcMain.handle('screens:select', async (_, sourceId) => {
