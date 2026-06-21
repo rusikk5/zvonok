@@ -220,7 +220,42 @@ class VoiceEngine {
   async setNoiseSuppression(enabled) {
     this.noiseSuppression = enabled;
     localStorage.setItem('zvonok_noise', enabled);
-    if (this.roomId) { const r = this.roomId; this.leave(); await this.join(r); }
+    if (!this.roomId) return;
+    await this._restartMic();
+  }
+
+  async _restartMic() {
+    const audioOpts = {
+      noiseSuppression: this.noiseSuppression,
+      echoCancellation: true,
+      autoGainControl:  true,
+      ...(this.micId ? { deviceId: { exact: this.micId } } : {}),
+    };
+    const newStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts, video: false });
+    const newTrack  = newStream.getAudioTracks()[0];
+    // Replace track in all active peer connections (no reconnect needed)
+    for (const [, peer] of this.peers) {
+      const sender = peer.pc.getSenders().find(s => s.track?.kind === 'audio');
+      if (sender) await sender.replaceTrack(newTrack).catch(() => {});
+    }
+    // Stop old stream and volume monitors
+    if (this.localStream) this.localStream.getAudioTracks().forEach(t => t.stop());
+    this._volCtxs.forEach(ctx => ctx.close().catch(() => {}));
+    this._volCtxs = [];
+    this.localStream = newStream;
+    this._watchVolume(this.localStream, (v) => {
+      if (this.autoGate && v < this.noiseThreshold) {
+        this._noiseFloor = this._noiseFloor * 0.97 + v * 0.03;
+        this.noiseThreshold = Math.max(5, Math.round(this._noiseFloor * 2.8));
+      }
+      if (this.onSpeaking) this.onSpeaking(this.myUserId, v > this.noiseThreshold && !this.muted);
+      if (this.onInputLevel) {
+        this.onInputLevel(
+          Math.min(100, Math.round(v / 60 * 100)),
+          Math.min(100, Math.round(this.noiseThreshold / 60 * 100))
+        );
+      }
+    });
   }
 
   setSensitivity(threshold) {

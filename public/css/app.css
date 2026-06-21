@@ -547,6 +547,7 @@ body:not(.auth-body){background:#0b0e11}
 .set-sec{margin-bottom:20px}
 .set-sec-title{font-size:.72rem;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #2b2d31;font-weight:600}
 .set-hint{font-size:.84rem;color:var(--ink-dim);margin-bottom:8px;line-height:1.5}
+.set-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .profile-edit-row{display:flex;gap:16px}
 .profile-ava-wrap{display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0}
 .profile-ava{width:80px;height:80px;border-radius:50%;overflow:hidden;border:1px solid #2b2d31;cursor:pointer}

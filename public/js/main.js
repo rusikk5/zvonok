@@ -1119,6 +1119,26 @@ async function openSettings() {
   if (S.me.name_color) $('set-color-pick').value = S.me.name_color;
   updateColorPreview();
 
+  // Voice processing settings
+  const sNoise = $('set-noise-chk'), sAuto = $('set-auto-chk');
+  const sSens  = $('set-sens'),      sSensVal = $('set-sens-val'), sManual = $('set-manual-row');
+  sNoise.checked       = S.voice.noiseSuppression;
+  sAuto.checked        = S.voice.autoGate;
+  sSens.value          = S.voice.noiseThreshold;
+  sSensVal.textContent = S.voice.noiseThreshold;
+  sManual.classList.toggle('hidden', S.voice.autoGate);
+
+  sNoise.onchange = async (e) => { await S.voice.setNoiseSuppression(e.target.checked); };
+  sAuto.onchange  = (e) => {
+    S.voice.setAutoGate(e.target.checked);
+    sManual.classList.toggle('hidden', e.target.checked);
+  };
+  sSens.oninput = (e) => {
+    const v = parseInt(e.target.value, 10);
+    sSensVal.textContent = v;
+    S.voice.setSensitivity(v);
+  };
+
   showModal('modal-settings');
   await loadAudioDevices();
 }
@@ -1666,54 +1686,18 @@ function setupUI() {
   });
 
   // More voice options
-  // Voice settings panel
-  const _vsPanel   = $('vs-settings-panel');
-  const _vsNoise   = $('vs-noise-chk');
-  const _vsAuto    = $('vs-auto-chk');
-  const _vsSens    = $('vs-sens');
-  const _vsSensVal = $('vs-sens-val');
-  const _vsManual  = $('vs-manual-row');
+  $('btn-vs-more').addEventListener('click', () => openSettings());
 
-  // Init from saved values
-  _vsNoise.checked = S.voice.noiseSuppression;
-  _vsAuto.checked  = S.voice.autoGate;
-  _vsSens.value    = S.voice.noiseThreshold;
-  _vsSensVal.textContent = S.voice.noiseThreshold;
-  if (S.voice.autoGate) _vsManual.classList.add('hidden');
-  else _vsManual.classList.remove('hidden');
-
-  $('btn-vs-more').addEventListener('click', (e) => {
-    e.stopPropagation();
-    _vsPanel.classList.toggle('hidden');
-  });
-  _vsPanel.addEventListener('click', e => e.stopPropagation());
-  document.addEventListener('click', () => _vsPanel.classList.add('hidden'));
-
-  _vsNoise.addEventListener('change', async (e) => {
-    await S.voice.setNoiseSuppression(e.target.checked);
-  });
-  _vsAuto.addEventListener('change', (e) => {
-    S.voice.setAutoGate(e.target.checked);
-    if (e.target.checked) _vsManual.classList.add('hidden');
-    else _vsManual.classList.remove('hidden');
-  });
-  _vsSens.addEventListener('input', (e) => {
-    const v = parseInt(e.target.value, 10);
-    _vsSensVal.textContent = v;
-    S.voice.setSensitivity(v);
-  });
-
-  // Level meter: update when in voice
+  // Voice settings in main settings modal
   S.voice.onInputLevel = (lvl, thresh) => {
-    const fill   = $('vs-level-fill');
-    const marker = $('vs-level-thresh');
+    const fill   = $('set-level-fill');
+    const marker = $('set-level-thresh');
     if (!fill || !marker) return;
     fill.style.width  = lvl + '%';
     marker.style.left = thresh + '%';
-    // Also sync manual slider with auto-adjusted threshold
     if (S.voice.autoGate) {
-      _vsSens.value = S.voice.noiseThreshold;
-      _vsSensVal.textContent = S.voice.noiseThreshold;
+      const sv = $('set-sens'); if (sv) sv.value = S.voice.noiseThreshold;
+      const sl = $('set-sens-val'); if (sl) sl.textContent = S.voice.noiseThreshold;
     }
   };
 

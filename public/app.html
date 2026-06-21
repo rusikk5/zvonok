@@ -140,37 +140,9 @@
           <button class="vbtn" id="btn-vs-screen" title="Демонстрация экрана">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           </button>
-          <button class="vbtn" id="btn-vs-more" title="Настройки голоса">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <button class="vbtn" id="btn-vs-more" title="Ещё">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
           </button>
-          <!-- Панель настроек голоса -->
-          <div class="vs-settings-panel hidden" id="vs-settings-panel">
-            <div class="vs-sp-title">Настройки голоса</div>
-            <label class="vs-sp-row">
-              <span>Шумоподавление</span>
-              <label class="tog"><input type="checkbox" id="vs-noise-chk"><span class="tog-slider"></span></label>
-            </label>
-            <div class="vs-sp-sep"></div>
-            <label class="vs-sp-row">
-              <span>Авто-чувствительность</span>
-              <label class="tog"><input type="checkbox" id="vs-auto-chk"><span class="tog-slider"></span></label>
-            </label>
-            <div id="vs-manual-row" class="hidden">
-              <div class="vs-sp-row" style="margin-top:6px">
-                <span style="color:var(--ink-dim);font-size:.78rem">Порог активации</span>
-                <span id="vs-sens-val" style="font-size:.78rem;font-weight:600"></span>
-              </div>
-              <input type="range" id="vs-sens" min="2" max="50" style="width:100%;margin:4px 0 0">
-            </div>
-            <div class="vs-sp-sep"></div>
-            <div class="vs-sp-row" style="margin-bottom:4px">
-              <span style="color:var(--ink-dim);font-size:.78rem">Уровень входа</span>
-            </div>
-            <div class="vs-level-bar">
-              <div class="vs-level-fill" id="vs-level-fill"></div>
-              <div class="vs-level-thresh" id="vs-level-thresh"></div>
-            </div>
-          </div>
           <button class="vbtn" id="btn-voice-leave" title="Покинуть войс" style="color:var(--live)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.45-2.98"/><path d="M2 2l20 20"/></svg>
           </button>
@@ -501,6 +473,37 @@
         <div style="margin-top:8px"><button class="abtn sm outline" id="btn-test-mic">Тест микрофона</button></div>
         <div class="set-hint" style="margin-top:14px">Динамики</div>
         <select id="sel-speaker" class="dev-select"></select>
+
+        <div class="set-hint" style="margin-top:18px">Обработка голоса</div>
+        <div class="set-toggle-row">
+          <div>
+            <div style="font-size:.85rem;font-weight:500">Шумоподавление</div>
+            <div style="font-size:.75rem;color:var(--ink-dim);margin-top:2px">Фильтрует фоновые шумы: вентилятор, клавиатуру, эхо</div>
+          </div>
+          <label class="tog"><input type="checkbox" id="set-noise-chk"><span class="tog-slider"></span></label>
+        </div>
+        <div class="set-toggle-row" style="margin-top:10px">
+          <div>
+            <div style="font-size:.85rem;font-weight:500">Авто-чувствительность</div>
+            <div style="font-size:.75rem;color:var(--ink-dim);margin-top:2px">Автоматически подстраивает порог под шум в комнате</div>
+          </div>
+          <label class="tog"><input type="checkbox" id="set-auto-chk"><span class="tog-slider"></span></label>
+        </div>
+        <div id="set-manual-row" class="hidden" style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:.82rem;color:var(--ink-dim)">Порог активации</span>
+            <span id="set-sens-val" style="font-size:.82rem;font-weight:700;color:var(--ink)"></span>
+          </div>
+          <input type="range" id="set-sens" min="2" max="50" style="width:100%">
+        </div>
+        <div style="margin-top:14px">
+          <div style="font-size:.78rem;color:var(--ink-dim);margin-bottom:6px">Уровень входа — войдите в голосовой канал чтобы увидеть</div>
+          <div class="vs-level-bar" style="height:8px">
+            <div class="vs-level-fill" id="set-level-fill"></div>
+            <div class="vs-level-thresh" id="set-level-thresh"></div>
+          </div>
+          <div style="font-size:.72rem;color:var(--ink-faint);margin-top:4px">Белая черта — порог. Голос выше черты = вас слышно</div>
+        </div>
       </div>
 
       <div class="set-sec">
