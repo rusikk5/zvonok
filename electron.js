@@ -113,19 +113,36 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // Screen share handler: try getSources inside handler context (different from IPC context)
+  // Screen share: get sources inside handler context, show IPC-based picker in renderer
   mainWindow.webContents.session.setDisplayMediaRequestHandler(async (_req, callback) => {
     try {
-      // thumbnailSize 0x0 — skip thumbnail generation, just enumerate sources
-      const sources = await desktopCapturer.getSources({
-        types: ['screen', 'window'],
-        thumbnailSize: { width: 0, height: 0 },
+      const [screens, windows] = await Promise.all([
+        desktopCapturer.getSources({ types: ['screen'],  thumbnailSize: { width: 320, height: 180 } }),
+        desktopCapturer.getSources({ types: ['window'],  thumbnailSize: { width: 320, height: 180 } }),
+      ]);
+      const all = [
+        ...screens.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: true  })),
+        ...windows.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: false })),
+      ];
+
+      if (!all.length) { callback({ video: null }); return; }
+
+      // Send sources to renderer and wait for user selection
+      mainWindow.webContents.send('screen:sources', all);
+      const selectedId = await new Promise((resolve) => {
+        const onPick   = (_, id) => { ipcMain.removeListener('screen:cancel', onCancel); resolve(id);   };
+        const onCancel = ()      => { ipcMain.removeListener('screen:pick',   onPick);   resolve(null); };
+        ipcMain.once('screen:pick',   onPick);
+        ipcMain.once('screen:cancel', onCancel);
       });
-      const screen = sources.find(s => s.id.startsWith('screen:')) || sources[0];
-      if (screen) { callback({ video: screen }); return; }
-    } catch {}
-    // getSources returned nothing — renderer will fall back to getUserMedia
-    callback({ video: null });
+
+      if (!selectedId) { callback({ video: null }); return; }
+      const src = [...screens, ...windows].find(s => s.id === selectedId);
+      callback({ video: src || screens[0] });
+    } catch(e) {
+      console.error('[screen handler]', e);
+      callback({ video: null });
+    }
   });
 }
 

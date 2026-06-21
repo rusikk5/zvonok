@@ -1089,8 +1089,49 @@ const COLOR_PRESETS = [
 ];
 
 // ── Screen share picker ───────────────────────────────────────
+let _spAllSources = [];
+
 function openScreenPicker() {
+  // Reset to step 1
+  $('sp-step-opts').classList.remove('hidden');
+  $('sp-step-pick').classList.add('hidden');
+  $('btn-sp-share').textContent = 'Выбрать источник';
+  $('btn-sp-share').disabled = false;
+  _spAllSources = [];
   showModal('modal-screen');
+}
+
+function _spShowSources(sources) {
+  _spAllSources = sources;
+  $('sp-step-opts').classList.add('hidden');
+  $('sp-step-pick').classList.remove('hidden');
+  $('btn-sp-share').textContent = 'Поделиться';
+  $('btn-sp-share').disabled = true; // enable on selection
+  _spPopulateGrid('screen');
+}
+
+function _spPopulateGrid(type) {
+  const grid = $('sp-grid');
+  const filtered = _spAllSources.filter(s => type === 'screen' ? s.isScreen : !s.isScreen);
+  grid.innerHTML = '';
+  if (!filtered.length) {
+    grid.innerHTML = '<div style="color:var(--ink-faint);text-align:center;padding:20px;grid-column:1/-1;font-size:.83rem">Нет источников</div>';
+    return;
+  }
+  filtered.forEach(src => {
+    const item = document.createElement('div');
+    item.className = 'sp-item';
+    item.dataset.sourceId = src.id;
+    item.innerHTML = `<img src="${src.thumbnail}" alt=""><div class="sp-item-name">${escHtml(src.name)}</div>`;
+    item.addEventListener('click', () => {
+      grid.querySelectorAll('.sp-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      $('btn-sp-share').disabled = false;
+    });
+    grid.appendChild(item);
+  });
+  // Auto-select first
+  grid.querySelector('.sp-item')?.click();
 }
 
 async function openSettings() {
@@ -1718,14 +1759,64 @@ function setupUI() {
     else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
   });
 
-  // screen share modal: share button
+  // Screen picker: tabs
+  $('sp-tabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.sp-tab');
+    if (!tab) return;
+    $('sp-tabs').querySelectorAll('.sp-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    _spPopulateGrid(tab.dataset.type);
+  });
+
+  // Screen picker: cancel/close
+  const _spCancel = () => {
+    hideModal('modal-screen');
+    if (window.electronAPI?.cancelScreen) window.electronAPI.cancelScreen();
+  };
+  $('btn-sp-cancel').addEventListener('click', _spCancel);
+  $('btn-sp-x').addEventListener('click', _spCancel);
+
+  // Screen picker: share button
   $('btn-sp-share').addEventListener('click', async () => {
     const quality = parseInt($('sp-quality').value, 10);
     const audio   = $('sp-audio').checked;
     const dims = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
-    hideModal('modal-screen');
-    await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
+
+    if ($('sp-step-pick').classList.contains('hidden')) {
+      // Step 1: "Выбрать источник" — start getDisplayMedia (Electron will show picker via handler)
+      // For non-Electron: just proceed directly
+      if (!window.electronAPI?.onScreenSources) {
+        hideModal('modal-screen');
+        await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
+      } else {
+        // Electron: call startScreenShare which triggers handler which sends screen:sources
+        $('btn-sp-share').disabled = true;
+        $('btn-sp-share').textContent = 'Загружаю...';
+        // startScreenShare will await getDisplayMedia which awaits IPC pick
+        S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
+        // don't await — modal stays open while handler waits for our pick IPC
+      }
+    } else {
+      // Step 2: source selected — send pick IPC
+      const selectedId = $('sp-grid').querySelector('.sp-item.selected')?.dataset.sourceId;
+      if (!selectedId) return;
+      hideModal('modal-screen');
+      if (window.electronAPI?.pickScreen) window.electronAPI.pickScreen(selectedId);
+    }
   });
+
+  // Electron: receive sources from handler and switch to picker view
+  if (window.electronAPI?.onScreenSources) {
+    window.electronAPI.onScreenSources((sources) => {
+      if (!sources?.length) {
+        hideModal('modal-screen');
+        toast('Не удалось получить список источников. Проверь Параметры Windows → Конфиденциальность → Запись экрана', 'error');
+        if (window.electronAPI?.cancelScreen) window.electronAPI.cancelScreen();
+        return;
+      }
+      _spShowSources(sources);
+    });
+  }
 
   // Wire voice.onScreenShare callback
   S.voice.onScreenShare = (sharing, _stream) => {
