@@ -1695,12 +1695,14 @@ function setupUI() {
     const marker = $('set-level-thresh');
     if (!fill || !marker) return;
     fill.style.width = lvl + '%';
-    // Smooth the threshold marker so it doesn't jump every frame in auto mode
-    _smoothThresh = _smoothThresh * 0.92 + thresh * 0.08;
-    marker.style.left = _smoothThresh.toFixed(1) + '%';
     if (S.voice.autoGate) {
-      const sv = $('set-sens'); if (sv) sv.value = S.voice.noiseThreshold;
-      const sl = $('set-sens-val'); if (sl) sl.textContent = S.voice.noiseThreshold;
+      // Auto mode: hide threshold line, don't touch the slider
+      marker.style.display = 'none';
+    } else {
+      // Manual mode: show smoothed threshold line
+      marker.style.display = '';
+      _smoothThresh = _smoothThresh * 0.85 + thresh * 0.15;
+      marker.style.left = _smoothThresh.toFixed(1) + '%';
     }
   };
 
