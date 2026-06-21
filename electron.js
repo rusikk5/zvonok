@@ -113,9 +113,9 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // useSystemPicker: Windows 11 shows native picker, selected source arrives in request.video
-  mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
-    callback({ video: request.video ?? null });
+  // useSystemPicker: Windows 11 native picker handles source selection and stream creation
+  mainWindow.webContents.session.setDisplayMediaRequestHandler((_req, callback) => {
+    callback({});
   }, { useSystemPicker: true });
 }
 

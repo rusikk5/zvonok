@@ -345,8 +345,8 @@ class VoiceEngine {
         audio: !!audio,
       });
     } catch(e) {
-      if (e.name !== 'NotAllowedError') // user cancelled — don't toast
-        if (this.onScreenShareError) this.onScreenShareError(e.message || String(e));
+      if (e.name === 'NotAllowedError') return; // user cancelled picker
+      if (this.onScreenShareError) this.onScreenShareError(e.message || e.name || String(e));
       return;
     }
 
