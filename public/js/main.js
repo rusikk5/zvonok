@@ -1126,7 +1126,13 @@ function populateScreenGrid(type) {
   const grid = $('sp-grid');
   const filtered = _spSources.filter(s => type === 'screen' ? s.isScreen : !s.isScreen);
   if (!filtered.length) {
-    grid.innerHTML = '<div style="color:var(--ink-faint);text-align:center;padding:24px;grid-column:1/-1">Нет источников</div>';
+    const total   = _spSources.length;
+    const screens = _spSources.filter(s => s.isScreen).length;
+    const wins    = _spSources.filter(s => !s.isScreen).length;
+    grid.innerHTML = `<div style="color:var(--ink-faint);text-align:center;padding:24px;grid-column:1/-1;font-size:.82rem">
+      Нет источников<br>
+      <span style="color:var(--ink-faint);font-size:.72rem">Загружено всего: ${total} (экранов: ${screens}, окон: ${wins})</span>
+    </div>`;
     return;
   }
 

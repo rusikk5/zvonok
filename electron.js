@@ -181,16 +181,16 @@ ipcMain.on('win:drag-end', () => { dragState = null; });
 // ── Screen share ─────────────────────────────────────────────
 ipcMain.handle('screens:get-sources', async () => {
   const thumbSize = { width: 320, height: 180 };
-  const [screens, windows] = await Promise.all([
-    desktopCapturer.getSources({ types: ['screen'], thumbnailSize: thumbSize }),
-    desktopCapturer.getSources({ types: ['window'], thumbnailSize: thumbSize }),
-  ]);
-  const toObj = (s, isScreen) => ({
-    id:       s.id,
-    name:     s.name,
-    thumbnail: s.thumbnail.toDataURL(),
-    isScreen,
-  });
+  let screens = [], windows = [];
+  try { screens = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: thumbSize }); } catch(e) { console.error('[cap] screens error:', e); }
+  try { windows = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: thumbSize }); } catch(e) { console.error('[cap] windows error:', e); }
+  console.log('[cap] screens:', screens.length, screens.map(s => s.name));
+  console.log('[cap] windows:', windows.length, windows.map(s => s.name));
+  const toObj = (s, isScreen) => {
+    let thumbnail = '';
+    try { thumbnail = s.thumbnail.toDataURL(); } catch {}
+    return { id: s.id, name: s.name, thumbnail, isScreen };
+  };
   return [
     ...screens.map(s => toObj(s, true)),
     ...windows.map(s => toObj(s, false)),
