@@ -5,12 +5,14 @@
   "main": "electron.js",
   "scripts": {
     "start": "node server.js",
+    "postinstall": "node -e \"try{require('fs').copyFileSync(require.resolve('@jitsi/rnnoise-wasm/dist/rnnoise.wasm'),'public/rnnoise.wasm')}catch(e){}\"",
     "dev": "SET ELECTRON_RUN_AS_NODE= && electron .",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "release": "electron-builder --publish always"
   },
   "dependencies": {
+    "@jitsi/rnnoise-wasm": "^0.2.1",
     "@libsql/client": "^0.17.4",
     "bcryptjs": "^2.4.3",
     "electron-updater": "^6.8.9",
@@ -45,7 +47,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico"

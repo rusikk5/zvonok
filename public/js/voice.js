@@ -15,6 +15,7 @@ class VoiceEngine {
     this.speakerId        = null;
     this._volCtxs         = [];     // remote-peer volume AudioContexts only
     this._micCtx          = null;   // local mic processing AudioContext
+    this._workletNode     = null;   // RNNoise AudioWorkletNode
     this._rawMicStream    = null;   // raw getUserMedia stream
     this._micRestartGen   = 0;      // race-condition guard
 
@@ -24,9 +25,9 @@ class VoiceEngine {
     this.onCameraChange = null;
     this.onInputLevel   = null;
 
-    this.noiseSuppression = localStorage.getItem('zvonok_noise')     !== 'false';
+    this.noiseSuppression = localStorage.getItem('zvonok_noise')    !== 'false';
     this.noiseThreshold   = parseInt(localStorage.getItem('zvonok_threshold') || '12', 10);
-    this.autoGate         = localStorage.getItem('zvonok_autogate')  !== 'false';
+    this.autoGate         = localStorage.getItem('zvonok_autogate') !== 'false';
     this._noiseFloor      = 8;
   }
 
@@ -72,7 +73,7 @@ class VoiceEngine {
     this.socket.emit('voice:join', { roomId });
   }
 
-  // Builds / rebuilds mic audio pipeline. Returns false if superseded.
+  // Returns false if superseded by a newer call
   async _setupMic() {
     const gen = ++this._micRestartGen;
 
@@ -80,61 +81,66 @@ class VoiceEngine {
     try {
       rawStream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          autoGainControl:  true,
+          echoCancellation:  true,
+          autoGainControl:   true,
+          noiseSuppression:  false, // handled by RNNoise worklet
           ...(this.micId ? { deviceId: { exact: this.micId } } : {}),
         },
         video: false,
       });
-    } catch (e) {
-      return false;
-    }
+    } catch { return false; }
 
-    if (gen !== this._micRestartGen) {
-      rawStream.getTracks().forEach(t => t.stop());
-      return false;
-    }
+    if (gen !== this._micRestartGen) { rawStream.getTracks().forEach(t => t.stop()); return false; }
 
     // Tear down previous mic infrastructure
-    if (this._micCtx) { this._micCtx.close().catch(() => {}); this._micCtx = null; }
+    if (this._workletNode) { this._workletNode.disconnect(); this._workletNode = null; }
+    if (this._micCtx)       { this._micCtx.close().catch(() => {}); this._micCtx = null; }
     if (this._rawMicStream) this._rawMicStream.getTracks().forEach(t => t.stop());
     this._rawMicStream = rawStream;
 
-    // --- Audio processing chain ---
     const ctx      = new AudioContext();
     this._micCtx   = ctx;
     const src      = ctx.createMediaStreamSource(rawStream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
-
     const dest = ctx.createMediaStreamDestination();
 
-    if (this.noiseSuppression) {
-      // High-pass filter: cuts rumble / fan hum below 80 Hz
-      const hpf = ctx.createBiquadFilter();
-      hpf.type           = 'highpass';
-      hpf.frequency.value = 80;
-      hpf.Q.value         = 0.7;
+    // --- Try to load RNNoise AudioWorklet ---
+    let usedWorklet = false;
+    try {
+      await ctx.audioWorklet.addModule('/js/rnnoise-processor.js');
+      const wn = new AudioWorkletNode(ctx, 'rnnoise-processor');
+      this._workletNode = wn;
 
-      // Compressor: boosts signal-to-noise by compressing loud peaks and
-      // making quiet background sounds relatively quieter
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -28;
-      comp.knee.value      = 8;
-      comp.ratio.value     = 8;
-      comp.attack.value    = 0.002;
-      comp.release.value   = 0.15;
-
-      src.connect(analyser);
-      analyser.connect(hpf);
-      hpf.connect(comp);
-      comp.connect(dest);
-    } else {
-      src.connect(analyser);
+      // Chain: src → rnnoiseWorklet → analyser → dest
+      src.connect(wn);
+      wn.connect(analyser);
       analyser.connect(dest);
+
+      // Send enabled state immediately, then WASM binary
+      wn.port.postMessage({ type: 'enabled', value: this.noiseSuppression });
+      fetch('/rnnoise.wasm')
+        .then(r => r.arrayBuffer())
+        .then(buf => wn.port.postMessage({ type: 'wasm', buffer: buf }, [buf]))
+        .catch(() => {});
+
+      usedWorklet = true;
+    } catch {
+      // Worklet unavailable — fall back to Web Audio filter chain
+      this._workletNode = null;
+      if (this.noiseSuppression) {
+        const hpf = ctx.createBiquadFilter();
+        hpf.type = 'highpass'; hpf.frequency.value = 80; hpf.Q.value = 0.7;
+        const comp = ctx.createDynamicsCompressor();
+        comp.threshold.value = -28; comp.knee.value = 8;
+        comp.ratio.value = 8; comp.attack.value = 0.002; comp.release.value = 0.15;
+        src.connect(analyser); analyser.connect(hpf); hpf.connect(comp); comp.connect(dest);
+      } else {
+        src.connect(analyser); analyser.connect(dest);
+      }
     }
 
-    // Volume monitoring inside this ctx (stops automatically when ctx closes)
+    // Volume monitoring (runs as long as this context is active)
     const buf = new Uint8Array(analyser.frequencyBinCount);
     const tick = () => {
       if (ctx !== this._micCtx || ctx.state === 'closed') return;
@@ -157,7 +163,7 @@ class VoiceEngine {
     return true;
   }
 
-  // Restart mic and hot-swap track in all existing peer connections
+  // Hot-swap mic track in all existing peer connections
   async _restartMic() {
     const ok = await this._setupMic();
     if (!ok) return;
@@ -174,6 +180,7 @@ class VoiceEngine {
     this.peers.forEach((_, sid) => this._cleanPeer(sid));
     this._volCtxs.forEach(ctx => ctx.close().catch(() => {}));
     this._volCtxs = [];
+    if (this._workletNode) { this._workletNode.disconnect(); this._workletNode = null; }
     if (this._micCtx)       { this._micCtx.close().catch(() => {}); this._micCtx = null; }
     if (this._rawMicStream) { this._rawMicStream.getTracks().forEach(t => t.stop()); this._rawMicStream = null; }
     this.localStream = null;
@@ -259,7 +266,6 @@ class VoiceEngine {
 
   setMuted(muted) {
     this.muted = muted;
-    // Mute at source so the AudioContext gets silence (not disable the processed output track)
     if (this._rawMicStream) this._rawMicStream.getAudioTracks().forEach(t => t.enabled = !muted);
     if (this.roomId) this.socket.emit('voice:mute', { roomId: this.roomId, muted });
     if (this.onSpeaking) this.onSpeaking(this.myUserId, false);
@@ -288,8 +294,13 @@ class VoiceEngine {
   async setNoiseSuppression(enabled) {
     this.noiseSuppression = enabled;
     localStorage.setItem('zvonok_noise', enabled);
-    if (!this.roomId) return;
-    await this._restartMic();
+    if (this._workletNode) {
+      // Instant toggle — no mic restart, no disconnection
+      this._workletNode.port.postMessage({ type: 'enabled', value: enabled });
+    } else if (this.roomId) {
+      // Fallback: rebuild filter chain
+      await this._restartMic();
+    }
   }
 
   setSensitivity(threshold) {
