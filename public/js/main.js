@@ -1095,7 +1095,6 @@ let _spCurrentType = 'screen';
 async function openScreenPicker() {
   _spAllSources = [];
   _spCurrentType = 'screen';
-  $('sp-tabs').querySelectorAll('.sp-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
   $('btn-sp-share').disabled = true;
   const grid = $('sp-grid');
   grid.innerHTML = '<div class="sp-loading">Загружаю...</div>';
@@ -1106,9 +1105,17 @@ async function openScreenPicker() {
   }
 
   if (!_spAllSources.length) {
-    // Fallback: show a single "Full Desktop" tile — will use getUserMedia
     _spAllSources = [{ id: '__desktop__', name: 'Весь рабочий стол', thumbnail: '', isScreen: true }];
   }
+
+  // Show "Окно" tab only if window sources are available
+  const hasWindows = _spAllSources.some(s => !s.isScreen);
+  const tabs = $('sp-tabs');
+  tabs.querySelectorAll('.sp-tab').forEach(t => {
+    if (t.dataset.type === 'window') t.classList.toggle('hidden', !hasWindows);
+    else t.classList.add('active');
+    t.classList.toggle('active', t.dataset.type === 'screen');
+  });
 
   _spPopulateGrid('screen');
 }
@@ -1120,7 +1127,7 @@ function _spPopulateGrid(type) {
   grid.innerHTML = '';
 
   if (!list.length) {
-    grid.innerHTML = '<div class="sp-loading">Нет источников</div>';
+    grid.innerHTML = `<div class="sp-loading">Нет доступных окон.<br><span style="font-size:.78rem;color:var(--ink-faint)">Включи Параметры → Конфиденциальность → Запись экрана и приложений</span></div>`;
     return;
   }
 
