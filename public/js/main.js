@@ -712,13 +712,10 @@ function leaveVoice() {
   stopVoiceTimer();
   renderVoiceCard();
   renderMembers();
-  // Also stop camera and screen share
   S.voice.disableCamera();
   $('camera-pip').classList.add('hidden');
   $('btn-vs-camera').classList.remove('on');
-  S.screenSharing = false;
-  $('btn-vs-screen').classList.remove('on');
-  $('screen-card').classList.add('hidden');
+  // Screen share cleanup is handled via voice.leave() → stopScreenShare() → onScreenShare callback
 }
 
 function toggleMute() {
@@ -1092,6 +1089,68 @@ const COLOR_PRESETS = [
   '#ffd93d','#6bcb77','#4d96ff','#ffffff','#aaaaaa',
 ];
 
+// ── Screen share picker ───────────────────────────────────────
+let _spSources = [];
+
+async function openScreenPicker() {
+  _spSources = [];
+  const grid  = $('sp-grid');
+  const hint  = $('sp-browser-hint');
+  const btn   = $('btn-sp-share');
+
+  // Reset selection
+  $('sp-tabs').querySelectorAll('.sp-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  btn.disabled = false;
+
+  if (window.electronAPI?.getScreenSources) {
+    hint.classList.add('hidden');
+    grid.innerHTML = '<div style="color:var(--ink-faint);text-align:center;padding:24px;grid-column:1/-1">Загружаю...</div>';
+    try {
+      _spSources = await window.electronAPI.getScreenSources();
+    } catch {
+      _spSources = [];
+    }
+    populateScreenGrid('screen');
+  } else {
+    // Browser: no thumbnails, just show hint
+    grid.innerHTML = '';
+    hint.classList.remove('hidden');
+    grid.appendChild(hint);
+    btn.disabled = false;
+  }
+
+  showModal('modal-screen');
+}
+
+function populateScreenGrid(type) {
+  const grid = $('sp-grid');
+  const filtered = _spSources.filter(s => type === 'screen' ? s.isScreen : !s.isScreen);
+  if (!filtered.length) {
+    grid.innerHTML = '<div style="color:var(--ink-faint);text-align:center;padding:24px;grid-column:1/-1">Нет источников</div>';
+    return;
+  }
+
+  grid.innerHTML = '';
+  let _selectedId = null;
+  filtered.forEach(src => {
+    const item = document.createElement('div');
+    item.className = 'sp-item';
+    item.dataset.sourceId = src.id;
+    item.innerHTML = `<img src="${src.thumbnail}" alt=""><div class="sp-item-name">${escHtml(src.name)}</div>`;
+    item.addEventListener('click', () => {
+      grid.querySelectorAll('.sp-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      _selectedId = src.id;
+    });
+    grid.appendChild(item);
+  });
+
+  // Auto-select first
+  if (filtered.length === 1) {
+    grid.querySelector('.sp-item')?.click();
+  }
+}
+
 async function openSettings() {
   $('set-name').value     = S.me.name     || '';
   $('set-username').value = S.me.username || '';
@@ -1203,8 +1262,9 @@ function setupUI() {
   document.querySelectorAll('.modal-ov').forEach(ov => {
     ov.addEventListener('click', e => { if (e.target === ov) { hideModal(ov.id); stopMicMeter(); } });
   });
-  document.querySelectorAll('.modal-x').forEach(btn => {
-    btn.addEventListener('click', () => { hideModal(btn.dataset.close); stopMicMeter(); });
+  document.addEventListener('click', (e) => {
+    const closer = e.target.closest('[data-close]');
+    if (closer?.dataset.close) { hideModal(closer.dataset.close); stopMicMeter(); }
   });
 
   // Close mini profile on outside click
@@ -1284,10 +1344,8 @@ function setupUI() {
   $('btn-voice-leave').addEventListener('click', leaveVoice);
   $('btn-vs-screen').addEventListener('click', () => {
     if (!S.voice.roomId) { toast('Сначала войди в голосовой чат', ''); return; }
-    S.screenSharing = !S.screenSharing;
-    $('btn-vs-screen').classList.toggle('on', S.screenSharing);
-    $('screen-card').classList.toggle('hidden', !S.screenSharing);
-    renderVoiceCard();
+    if (S.voice.screenStream) { S.voice.stopScreenShare(); return; }
+    openScreenPicker();
   });
 
   // Camera toggle
@@ -1706,13 +1764,54 @@ function setupUI() {
     }
   };
 
-  // Stop screen share from card
-  $('btn-screen-share-stop').addEventListener('click', () => {
-    S.screenSharing = false;
-    $('btn-vs-screen').classList.remove('on');
-    $('screen-card').classList.add('hidden');
-    renderVoiceCard();
+  // Stop screen share
+  $('btn-screen-share-stop').addEventListener('click', () => S.voice.stopScreenShare());
+  $('btn-stop-share').addEventListener('click', () => S.voice.stopScreenShare());
+
+  // Screen overlay controls
+  $('btn-screen-ov-close').addEventListener('click', () => $('screen-ov').classList.add('hidden'));
+  $('btn-screen-ov-fs').addEventListener('click', () => {
+    const vid = $('screen-ov-video');
+    if (vid.requestFullscreen) vid.requestFullscreen();
+    else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
   });
+
+  // screen share modal: tabs
+  $('sp-tabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.sp-tab');
+    if (!tab) return;
+    $('sp-tabs').querySelectorAll('.sp-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    populateScreenGrid(tab.dataset.type);
+  });
+
+  // screen share modal: share button
+  $('btn-sp-share').addEventListener('click', async () => {
+    const quality = parseInt($('sp-quality').value, 10);
+    const audio   = $('sp-audio').checked;
+    const selectedId = $('sp-grid').querySelector('.sp-item.selected')?.dataset.sourceId || null;
+    const dims = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
+
+    hideModal('modal-screen');
+    await S.voice.startScreenShare({ sourceId: selectedId, width: dims[0], height: dims[1], fps: dims[2], audio });
+  });
+
+  // Wire voice.onScreenShare callback
+  S.voice.onScreenShare = (sharing, _stream) => {
+    $('btn-vs-screen').classList.toggle('sharing', sharing);
+    $('vs-sharing').classList.toggle('hidden', !sharing);
+    $('screen-card').classList.toggle('hidden', !sharing);
+  };
+
+  // Wire voice.onRemoteScreen callback
+  S.voice.onRemoteScreen = (userId, stream) => {
+    const ov = $('screen-ov');
+    if (!stream) { ov.classList.add('hidden'); return; }
+    const user = (S.members || []).find(m => m.id === userId);
+    $('screen-ov-who').textContent = (user?.name || 'Участник') + ' демонстрирует экран';
+    $('screen-ov-video').srcObject = stream;
+    ov.classList.remove('hidden');
+  };
 
   // Text channel actions
   $('btn-toggle-members-ch').addEventListener('click', () => {

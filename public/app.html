@@ -147,6 +147,12 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.45-2.98"/><path d="M2 2l20 20"/></svg>
           </button>
         </div>
+        <!-- Screen share active indicator -->
+        <div class="vs-sharing hidden" id="vs-sharing">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#23a55a" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span>Вы демонстрируете экран</span>
+          <button id="btn-stop-share">Остановить</button>
+        </div>
       </div>
 
       <!-- Меню статуса -->
@@ -510,6 +516,57 @@
       <button class="abtn" id="btn-save-profile" style="width:100%">Сохранить</button>
     </div>
   </div>
+</div>
+
+<!-- Screen share picker -->
+<div class="modal-ov hidden" id="modal-screen">
+  <div class="modal" style="width:660px;max-width:96vw">
+    <div class="modal-hdr">
+      Демонстрация экрана
+      <button class="modal-x" data-close="modal-screen">✕</button>
+    </div>
+    <div class="modal-body modal-scroll" style="max-height:70vh">
+      <div class="sp-tabs" id="sp-tabs">
+        <button class="sp-tab active" data-type="screen">Весь экран</button>
+        <button class="sp-tab" data-type="window">Окно</button>
+      </div>
+      <div class="sp-grid" id="sp-grid">
+        <div class="sp-browser-hint hidden" id="sp-browser-hint">Нажмите «Поделиться» — браузер покажет выбор экрана</div>
+      </div>
+      <div class="sp-opts">
+        <div class="sp-opt-row">
+          <span>Качество</span>
+          <select id="sp-quality" class="dev-select" style="width:auto">
+            <option value="480">480p</option>
+            <option value="720" selected>720p</option>
+            <option value="1080">1080p</option>
+          </select>
+        </div>
+        <div class="sp-opt-row">
+          <span>Звук системы</span>
+          <label class="tog"><input type="checkbox" id="sp-audio"><span class="tog-slider"></span></label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot" style="gap:8px">
+      <button class="abtn outline" data-close="modal-screen">Отмена</button>
+      <button class="abtn" id="btn-sp-share">Поделиться</button>
+    </div>
+  </div>
+</div>
+
+<!-- Received screen share overlay -->
+<div class="screen-ov hidden" id="screen-ov">
+  <div class="screen-ov-bar">
+    <span id="screen-ov-who">Демонстрация экрана</span>
+    <div style="display:flex;gap:6px">
+      <button class="screen-ov-btn" id="btn-screen-ov-fs" title="Полный экран">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+      <button class="screen-ov-btn" id="btn-screen-ov-close" title="Закрыть">✕</button>
+    </div>
+  </div>
+  <video id="screen-ov-video" autoplay playsinline muted></video>
 </div>
 
 <!-- Настройки комнаты -->

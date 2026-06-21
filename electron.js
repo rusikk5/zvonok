@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
 const path = require('path');
 const { PROD_SERVER_URL } = require('./config');
 
@@ -7,6 +7,7 @@ let mainWindow  = null;
 let prevBounds  = null;
 let dragState   = null;
 let splashWin   = null;
+let _pendingScreenId = null;
 
 // ── Update window (shown during download) ───────────────────────
 function createSplash(msg) {
@@ -112,6 +113,16 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
+
+  // Allow getDisplayMedia to use desktopCapturer with pre-selected source
+  mainWindow.webContents.session.setDisplayMediaRequestHandler((_req, callback) => {
+    const pick = _pendingScreenId;
+    _pendingScreenId = null;
+    desktopCapturer.getSources({ types: ['screen', 'window'] }).then(sources => {
+      const src = pick ? (sources.find(s => s.id === pick) || sources[0]) : sources[0];
+      callback({ video: src });
+    }).catch(() => callback({}));
+  });
 }
 
 // ── Window controls ──────────────────────────────────────────
@@ -166,6 +177,26 @@ ipcMain.on('win:drag-move', (_e, sx, sy) => {
 });
 
 ipcMain.on('win:drag-end', () => { dragState = null; });
+
+// ── Screen share ─────────────────────────────────────────────
+ipcMain.handle('screens:get-sources', async () => {
+  const sources = await desktopCapturer.getSources({
+    types: ['screen', 'window'],
+    thumbnailSize: { width: 320, height: 180 },
+    fetchWindowIcons: true,
+  });
+  return sources.map(s => ({
+    id:        s.id,
+    name:      s.name,
+    thumbnail: s.thumbnail.toDataURL(),
+    appIcon:   s.appIcon?.toDataURL() || null,
+    isScreen:  s.id.startsWith('screen:'),
+  }));
+});
+
+ipcMain.handle('screens:select', async (_, sourceId) => {
+  _pendingScreenId = sourceId;
+});
 
 // ── Single instance ──────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock();

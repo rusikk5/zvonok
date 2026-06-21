@@ -710,6 +710,10 @@ io.on('connection', async socket => {
   socket.on('voice:ice',    ({ to, candidate }) => io.to(to).emit('voice:ice',    { from: socket.id, candidate }));
   socket.on('voice:mute', ({ roomId, muted }) =>
     io.to(`voice:${roomId}`).emit('voice:mute', { userId: uid, muted }));
+  socket.on('screen:start', ({ roomId }) =>
+    socket.to(`voice:${roomId}`).emit('screen:started', { userId: uid }));
+  socket.on('screen:stop', ({ roomId }) =>
+    socket.to(`voice:${roomId}`).emit('screen:stopped', { userId: uid }));
 
   socket.on('set:status', (status) => {
     if (!['online','dnd','invisible'].includes(status)) return;

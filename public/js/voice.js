@@ -5,25 +5,29 @@ class VoiceEngine {
     this.socket           = null;
     this.myUserId         = null;
     this.roomId           = null;
-    this.localStream      = null;   // processed stream → WebRTC
-    this.localVideoStream = null;
+    this.localStream      = null;   // processed mic stream → WebRTC
+    this.localVideoStream = null;   // camera stream
+    this.screenStream     = null;   // screen share stream
     this.cameraEnabled    = false;
-    this.peers            = new Map();
-    this.audioEls         = new Map();
+    this.peers            = new Map();  // socketId → { pc, userId }
+    this.audioEls         = new Map();  // socketId → HTMLAudioElement
+    this._screenSenders   = new Map();  // socketId → RTCRtpSender
     this.muted            = false;
     this.micId            = null;
     this.speakerId        = null;
-    this._volCtxs         = [];     // remote-peer volume AudioContexts only
-    this._micCtx          = null;   // local mic processing AudioContext
-    this._workletNode     = null;   // RNNoise AudioWorkletNode
-    this._rawMicStream    = null;   // raw getUserMedia stream
-    this._micRestartGen   = 0;      // race-condition guard
+    this._volCtxs         = [];
+    this._micCtx          = null;
+    this._workletNode     = null;
+    this._rawMicStream    = null;
+    this._micRestartGen   = 0;
 
     this.onSpeaking     = null;
     this.onUserLeft     = null;
     this.onUserJoined   = null;
     this.onCameraChange = null;
     this.onInputLevel   = null;
+    this.onScreenShare  = null;  // (isSharing, stream | null)
+    this.onRemoteScreen = null;  // (userId, stream | null)
 
     this.noiseSuppression = localStorage.getItem('zvonok_noise')    !== 'false';
     this.noiseThreshold   = parseInt(localStorage.getItem('zvonok_threshold') || '12', 10);
@@ -41,29 +45,52 @@ class VoiceEngine {
     this.socket.on('voice:init', async (participants) => {
       for (const p of participants) await this._offer(p.socketId, p.userId);
     });
+
     this.socket.on('voice:joined', ({ userId }) => {
       if (this.onUserJoined) this.onUserJoined(userId);
     });
+
     this.socket.on('voice:offer', async ({ from, fromUser, offer }) => {
-      if (this.peers.has(from)) { this.peers.get(from).pc.close(); this._cleanPeer(from); }
+      if (this.peers.has(from)) {
+        // Renegotiation on existing peer (e.g. screen share added)
+        const { pc } = this.peers.get(from);
+        try {
+          await pc.setRemoteDescription(offer);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          this.socket.emit('voice:answer', { to: from, answer });
+        } catch {}
+        return;
+      }
+      // New peer connection
       const pc = this._makePeer(from, fromUser);
       await pc.setRemoteDescription(offer);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       this.socket.emit('voice:answer', { to: from, answer });
     });
+
     this.socket.on('voice:answer', async ({ from, answer }) => {
       const peer = this.peers.get(from);
       if (peer && peer.pc.signalingState === 'have-local-offer')
         await peer.pc.setRemoteDescription(answer).catch(() => {});
     });
+
     this.socket.on('voice:ice', async ({ from, candidate }) => {
       const peer = this.peers.get(from);
       if (peer && candidate) await peer.pc.addIceCandidate(candidate).catch(() => {});
     });
+
     this.socket.on('voice:left', ({ userId, socketId }) => {
       this._cleanPeer(socketId);
       if (this.onUserLeft) this.onUserLeft(userId);
+    });
+
+    this.socket.on('screen:started', ({ userId }) => {
+      // Remote screen track arrives via WebRTC ontrack — this is just for future UI use
+    });
+    this.socket.on('screen:stopped', ({ userId }) => {
+      if (this.onRemoteScreen) this.onRemoteScreen(userId, null);
     });
   }
 
@@ -73,17 +100,15 @@ class VoiceEngine {
     this.socket.emit('voice:join', { roomId });
   }
 
-  // Returns false if superseded by a newer call
   async _setupMic() {
     const gen = ++this._micRestartGen;
-
     let rawStream;
     try {
       rawStream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation:  true,
-          autoGainControl:   true,
-          noiseSuppression:  false, // handled by RNNoise worklet
+          echoCancellation: true,
+          autoGainControl:  true,
+          noiseSuppression: false,
           ...(this.micId ? { deviceId: { exact: this.micId } } : {}),
         },
         video: false,
@@ -92,7 +117,6 @@ class VoiceEngine {
 
     if (gen !== this._micRestartGen) { rawStream.getTracks().forEach(t => t.stop()); return false; }
 
-    // Tear down previous mic infrastructure
     if (this._workletNode) { this._workletNode.disconnect(); this._workletNode = null; }
     if (this._micCtx)       { this._micCtx.close().catch(() => {}); this._micCtx = null; }
     if (this._rawMicStream) this._rawMicStream.getTracks().forEach(t => t.stop());
@@ -105,45 +129,33 @@ class VoiceEngine {
     analyser.fftSize = 256;
     const dest = ctx.createMediaStreamDestination();
 
-    // --- Try to load RNNoise AudioWorklet ---
-    let usedWorklet = false;
     try {
       await ctx.audioWorklet.addModule('/js/rnnoise-processor.js');
       const wn = new AudioWorkletNode(ctx, 'rnnoise-processor');
       this._workletNode = wn;
-
-      // Chain: src → rnnoiseWorklet → analyser → dest
-      src.connect(wn);
-      wn.connect(analyser);
-      analyser.connect(dest);
-
+      src.connect(wn); wn.connect(analyser); analyser.connect(dest);
       wn.port.onmessage = ({ data }) => {
-        if (data.type === 'error') console.warn('[RNNoise] WASM error:', data.msg);
+        if (data.type === 'error') console.warn('[RNNoise]', data.msg);
       };
-      // Send enabled state immediately, then WASM binary
       wn.port.postMessage({ type: 'enabled', value: this.noiseSuppression });
       fetch('/rnnoise.wasm')
         .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
         .then(buf => wn.port.postMessage({ type: 'wasm', buffer: buf }, [buf]))
-        .catch(e => console.warn('[RNNoise] fetch failed:', e));
-
-      usedWorklet = true;
+        .catch(e => console.warn('[RNNoise] fetch:', e));
     } catch {
-      // Worklet unavailable — fall back to Web Audio filter chain
       this._workletNode = null;
       if (this.noiseSuppression) {
         const hpf = ctx.createBiquadFilter();
         hpf.type = 'highpass'; hpf.frequency.value = 80; hpf.Q.value = 0.7;
         const comp = ctx.createDynamicsCompressor();
-        comp.threshold.value = -28; comp.knee.value = 8;
-        comp.ratio.value = 8; comp.attack.value = 0.002; comp.release.value = 0.15;
+        comp.threshold.value = -28; comp.knee.value = 8; comp.ratio.value = 8;
+        comp.attack.value = 0.002; comp.release.value = 0.15;
         src.connect(analyser); analyser.connect(hpf); hpf.connect(comp); comp.connect(dest);
       } else {
         src.connect(analyser); analyser.connect(dest);
       }
     }
 
-    // Volume monitoring (runs as long as this context is active)
     const buf = new Uint8Array(analyser.frequencyBinCount);
     const tick = () => {
       if (ctx !== this._micCtx || ctx.state === 'closed') return;
@@ -166,7 +178,6 @@ class VoiceEngine {
     return true;
   }
 
-  // Hot-swap mic track in all existing peer connections
   async _restartMic() {
     const ok = await this._setupMic();
     if (!ok) return;
@@ -179,6 +190,7 @@ class VoiceEngine {
   }
 
   leave() {
+    this.stopScreenShare();
     if (this.roomId) this.socket.emit('voice:leave', { roomId: this.roomId });
     this.peers.forEach((_, sid) => this._cleanPeer(sid));
     this._volCtxs.forEach(ctx => ctx.close().catch(() => {}));
@@ -213,6 +225,12 @@ class VoiceEngine {
       this.localStream.getTracks().forEach(t => pc.addTrack(t, this.localStream));
     if (this.localVideoStream)
       this.localVideoStream.getTracks().forEach(t => pc.addTrack(t, this.localVideoStream));
+    if (this.screenStream) {
+      this.screenStream.getTracks().forEach(t => {
+        const sender = pc.addTrack(t, this.screenStream);
+        this._screenSenders.set(socketId, sender);
+      });
+    }
 
     const audio = document.createElement('audio');
     audio.autoplay = true; audio.playsInline = true;
@@ -221,16 +239,38 @@ class VoiceEngine {
     this.audioEls.set(socketId, audio);
 
     pc.ontrack = (e) => {
-      if (e.track.kind !== 'audio') return;
-      const stream = e.streams[0] || new MediaStream([e.track]);
-      audio.srcObject = stream;
-      this._watchVolume(stream, (v) => {
-        if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
-      });
+      if (e.track.kind === 'audio') {
+        const stream = e.streams[0] || new MediaStream([e.track]);
+        audio.srcObject = stream;
+        this._watchVolume(stream, (v) => {
+          if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
+        });
+      } else if (e.track.kind === 'video') {
+        const stream = e.streams[0] || new MediaStream([e.track]);
+        if (this.onRemoteScreen) this.onRemoteScreen(userId, stream);
+        e.track.addEventListener('ended', () => {
+          if (this.onRemoteScreen) this.onRemoteScreen(userId, null);
+        });
+      }
     };
+
     pc.onicecandidate = ({ candidate }) => {
       if (candidate) this.socket.emit('voice:ice', { to: socketId, candidate });
     };
+
+    // Handle renegotiation (triggered when screen share track is added)
+    let _negotiating = false;
+    pc.onnegotiationneeded = async () => {
+      if (pc.signalingState !== 'stable' || _negotiating) return;
+      _negotiating = true;
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        this.socket.emit('voice:offer', { to: socketId, offer });
+      } catch {}
+      _negotiating = false;
+    };
+
     pc.onconnectionstatechange = () => {
       if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
         this._cleanPeer(socketId);
@@ -247,9 +287,9 @@ class VoiceEngine {
     if (peer) { peer.pc.close(); this.peers.delete(socketId); }
     const audio = this.audioEls.get(socketId);
     if (audio) { audio.srcObject = null; audio.remove(); this.audioEls.delete(socketId); }
+    this._screenSenders.delete(socketId);
   }
 
-  // Used only for remote peer speaking indicators
   _watchVolume(stream, callback) {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -294,14 +334,55 @@ class VoiceEngine {
     if (this.onCameraChange) this.onCameraChange(false, null);
   }
 
+  // ── Screen share ──────────────────────────────────────────
+  async startScreenShare({ sourceId, width, height, fps, audio }) {
+    if (this.screenStream) return;
+
+    try {
+      if (window.electronAPI?.selectScreenSource && sourceId)
+        await window.electronAPI.selectScreenSource(sourceId);
+
+      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps } },
+        audio: !!audio,
+      });
+    } catch { return; }
+
+    const track = this.screenStream.getVideoTracks()[0];
+    if (!track) { this.screenStream.getTracks().forEach(t => t.stop()); this.screenStream = null; return; }
+
+    // Add to all existing peers — onnegotiationneeded fires automatically
+    for (const [sid, peer] of this.peers) {
+      const sender = peer.pc.addTrack(track, this.screenStream);
+      this._screenSenders.set(sid, sender);
+    }
+
+    if (this.roomId) this.socket.emit('screen:start', { roomId: this.roomId });
+    track.addEventListener('ended', () => this.stopScreenShare());
+    if (this.onScreenShare) this.onScreenShare(true, this.screenStream);
+  }
+
+  stopScreenShare() {
+    if (!this.screenStream) return;
+    this.screenStream.getTracks().forEach(t => t.stop());
+    this.screenStream = null;
+
+    for (const [sid, sender] of this._screenSenders) {
+      const peer = this.peers.get(sid);
+      if (peer) try { peer.pc.removeTrack(sender); } catch {}
+    }
+    this._screenSenders.clear();
+
+    if (this.roomId) this.socket.emit('screen:stop', { roomId: this.roomId });
+    if (this.onScreenShare) this.onScreenShare(false, null);
+  }
+
   async setNoiseSuppression(enabled) {
     this.noiseSuppression = enabled;
     localStorage.setItem('zvonok_noise', enabled);
     if (this._workletNode) {
-      // Instant toggle — no mic restart, no disconnection
       this._workletNode.port.postMessage({ type: 'enabled', value: enabled });
     } else if (this.roomId) {
-      // Fallback: rebuild filter chain
       await this._restartMic();
     }
   }
