@@ -1689,12 +1689,15 @@ function setupUI() {
   $('btn-vs-more').addEventListener('click', () => openSettings());
 
   // Voice settings in main settings modal
+  let _smoothThresh = 0;
   S.voice.onInputLevel = (lvl, thresh) => {
     const fill   = $('set-level-fill');
     const marker = $('set-level-thresh');
     if (!fill || !marker) return;
-    fill.style.width  = lvl + '%';
-    marker.style.left = thresh + '%';
+    fill.style.width = lvl + '%';
+    // Smooth the threshold marker so it doesn't jump every frame in auto mode
+    _smoothThresh = _smoothThresh * 0.92 + thresh * 0.08;
+    marker.style.left = _smoothThresh.toFixed(1) + '%';
     if (S.voice.autoGate) {
       const sv = $('set-sens'); if (sv) sv.value = S.voice.noiseThreshold;
       const sl = $('set-sens-val'); if (sl) sl.textContent = S.voice.noiseThreshold;

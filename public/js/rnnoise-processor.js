@@ -1,14 +1,14 @@
 'use strict';
 
-const FRAME = 480;  // RNNoise processes 480 samples at 48 kHz (~10 ms)
-const CAP   = 8192; // ring-buffer capacity (must be power of 2)
+const FRAME = 480;
+const CAP   = 16384; // ring buffer (power of 2)
+const M     = CAP - 1;
 
 class RNNoiseProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this._ready   = false;
     this._enabled = true;
-    // Ring buffers (samples scaled to [-32768, 32767])
     this._inRing  = new Float32Array(CAP);
     this._outRing = new Float32Array(CAP);
     this._inW = 0; this._inR = 0;
@@ -21,24 +21,56 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
   }
 
   async _init(buffer) {
-    try {
-      const sharedMem = new WebAssembly.Memory({ initial: 64, maximum: 256 });
-      const { instance } = await WebAssembly.instantiate(buffer, {
-        env: { memory: sharedMem }
-      });
-      const exp = instance.exports;
-      const mem = exp.memory || sharedMem;
+    // Emscripten imports: module "a", keys "a" (_emscripten_resize_heap) and "b" (_emscripten_memcpy_big)
+    let HEAPU8     = new Uint8Array(0);
+    let wasmMemory = null;
 
-      this._state   = exp.rnnoise_create(0);
-      this._inPtr   = exp.malloc(FRAME * 4);
-      this._outPtr  = exp.malloc(FRAME * 4);
-      this._heapIn  = new Float32Array(mem.buffer, this._inPtr,  FRAME);
-      this._heapOut = new Float32Array(mem.buffer, this._outPtr, FRAME);
-      this._process = exp.rnnoise_process_frame;
-      this._ready   = true;
+    const imports = {
+      "a": {
+        "b": (dest, src, num) => {
+          HEAPU8.copyWithin(dest, src, src + num);
+        },
+        "a": (requestedSize) => {
+          if (!wasmMemory) return 0;
+          requestedSize = requestedSize >>> 0;
+          if (requestedSize > 2147483648) return 0;
+          const oldSize = HEAPU8.length;
+          const alignUp = (x, m) => x + (m - x % m) % m;
+          for (let c = 1; c <= 4; c *= 2) {
+            const overgrown = Math.min(oldSize * (1 + 0.2 / c), requestedSize + 100663296);
+            const newSize   = Math.min(2147483648, alignUp(Math.max(requestedSize, overgrown), 65536));
+            try {
+              wasmMemory.grow((newSize - HEAPU8.buffer.byteLength + 65535) >>> 16);
+              HEAPU8 = new Uint8Array(wasmMemory.buffer);
+              return 1;
+            } catch {}
+          }
+          return 0;
+        }
+      }
+    };
+
+    try {
+      const { instance } = await WebAssembly.instantiate(buffer, imports);
+      const exp = instance.exports;
+
+      wasmMemory = exp["c"];             // exported Memory
+      HEAPU8     = new Uint8Array(wasmMemory.buffer);
+
+      exp["d"]();                        // __wasm_call_ctors (must run before using the module)
+
+      this._state  = exp["f"](0);        // rnnoise_create(null model → built-in)
+      this._inPtr  = exp["g"](FRAME * 4);// malloc
+      this._outPtr = exp["g"](FRAME * 4);// malloc
+      this._proc   = exp["j"];           // rnnoise_process_frame
+      this._inOff  = this._inPtr  >> 2;
+      this._outOff = this._outPtr >> 2;
+      this._heapF32 = new Float32Array(wasmMemory.buffer); // stable — rnnoise never grows memory during process
+
+      this._ready = true;
       this.port.postMessage({ type: 'ready' });
-    } catch {
-      // Stays in passthrough mode if WASM init fails
+    } catch (e) {
+      this.port.postMessage({ type: 'error', msg: String(e) });
     }
   }
 
@@ -52,20 +84,19 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    const M = CAP - 1;
-
     // Enqueue scaled input
     for (let i = 0; i < inp.length; i++)
       this._inRing[this._inW++ & M] = inp[i] * 32768;
 
     // Process complete 480-sample frames
     while (this._inW - this._inR >= FRAME) {
+      const hf = this._heapF32;
       for (let j = 0; j < FRAME; j++)
-        this._heapIn[j] = this._inRing[(this._inR + j) & M];
+        hf[this._inOff + j] = this._inRing[(this._inR + j) & M];
       this._inR += FRAME;
-      this._process(this._state, this._outPtr, this._inPtr);
+      this._proc(this._state, this._outPtr, this._inPtr);
       for (let j = 0; j < FRAME; j++)
-        this._outRing[this._outW++ & M] = this._heapOut[j];
+        this._outRing[this._outW++ & M] = hf[this._outOff + j];
     }
 
     // Dequeue 128 output samples
@@ -73,7 +104,7 @@ class RNNoiseProcessor extends AudioWorkletProcessor {
       for (let i = 0; i < out.length; i++)
         out[i] = this._outRing[this._outR++ & M] / 32768;
     } else {
-      out.set(inp); // not enough buffered yet → pass through
+      out.set(inp);
     }
 
     return true;

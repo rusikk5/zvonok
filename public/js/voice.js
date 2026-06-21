@@ -117,12 +117,15 @@ class VoiceEngine {
       wn.connect(analyser);
       analyser.connect(dest);
 
+      wn.port.onmessage = ({ data }) => {
+        if (data.type === 'error') console.warn('[RNNoise] WASM error:', data.msg);
+      };
       // Send enabled state immediately, then WASM binary
       wn.port.postMessage({ type: 'enabled', value: this.noiseSuppression });
       fetch('/rnnoise.wasm')
-        .then(r => r.arrayBuffer())
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
         .then(buf => wn.port.postMessage({ type: 'wasm', buffer: buf }, [buf]))
-        .catch(() => {});
+        .catch(e => console.warn('[RNNoise] fetch failed:', e));
 
       usedWorklet = true;
     } catch {
