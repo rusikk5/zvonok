@@ -336,27 +336,21 @@ class VoiceEngine {
   }
 
   // ── Screen share ──────────────────────────────────────────
-  async startScreenShare({ width, height, fps, audio }) {
+  async startScreenShare({ width, height, fps, audio, sourceId, bounds, allBounds }) {
     if (this.screenStream) return;
 
     try {
-      // getDisplayMedia → useSystemPicker in Electron handler shows Windows native picker (like Discord)
-      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps } },
-        audio: !!audio,
-      });
-    } catch(e) {
-      if (e.name === 'NotAllowedError') return; // user cancelled
-      // System picker unavailable (handler returned null) → fall back to full desktop
-      try {
+      if (bounds && allBounds) {
+        this.screenStream = await this._captureDisplayRegion({ width, height, fps, bounds, allBounds });
+      } else {
         this.screenStream = await navigator.mediaDevices.getUserMedia({
           video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: width, maxHeight: height, maxFrameRate: fps } },
           audio: false,
         });
-      } catch(e2) {
-        if (this.onScreenShareError) this.onScreenShareError(e2.message || String(e2));
-        return;
       }
+    } catch(e) {
+      if (this.onScreenShareError) this.onScreenShareError(e.message || String(e));
+      return;
     }
 
     const track = this.screenStream.getVideoTracks()[0];
@@ -386,6 +380,49 @@ class VoiceEngine {
 
     if (this.roomId) this.socket.emit('screen:stop', { roomId: this.roomId });
     if (this.onScreenShare) this.onScreenShare(false, null);
+  }
+
+  async _captureDisplayRegion({ width, height, fps, bounds, allBounds }) {
+    const fullStream = await navigator.mediaDevices.getUserMedia({
+      video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: 3840, maxHeight: 2160, maxFrameRate: fps } },
+      audio: false,
+    });
+
+    const minX   = Math.min(...allBounds.map(b => b.x));
+    const minY   = Math.min(...allBounds.map(b => b.y));
+    const totalW = Math.max(...allBounds.map(b => b.x + b.width))  - minX;
+    const totalH = Math.max(...allBounds.map(b => b.y + b.height)) - minY;
+
+    const video = document.createElement('video');
+    video.srcObject = fullStream;
+    video.muted = true;
+    await new Promise(r => { video.onloadedmetadata = r; video.play().catch(() => {}); });
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.min(width,  bounds.width);
+    canvas.height = Math.min(height, bounds.height);
+    const ctx = canvas.getContext('2d');
+
+    let raf;
+    const draw = () => {
+      const sx = video.videoWidth  / totalW;
+      const sy = video.videoHeight / totalH;
+      ctx.drawImage(video,
+        (bounds.x - minX) * sx, (bounds.y - minY) * sy,
+        bounds.width * sx,      bounds.height * sy,
+        0, 0, canvas.width, canvas.height,
+      );
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+
+    const cropped = canvas.captureStream(fps);
+    cropped.getVideoTracks()[0]?.addEventListener('ended', () => {
+      cancelAnimationFrame(raf);
+      fullStream.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    });
+    return cropped;
   }
 
   async setNoiseSuppression(enabled) {

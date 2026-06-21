@@ -114,13 +114,26 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // useSystemPicker: true → Windows GraphicsCapturePicker (no privacy permission needed, same as Discord)
-  // Handler only called if system picker is unavailable → renderer falls back to getUserMedia
   mainWindow.webContents.session.setDisplayMediaRequestHandler(
     (_req, callback) => { callback({ video: null }); },
-    { useSystemPicker: true },
   );
 }
+
+// ── Screen sources IPC ───────────────────────────────────────
+ipcMain.handle('screen:displays', () => {
+  const displays  = screen.getAllDisplays();
+  const primaryId = screen.getPrimaryDisplay().id;
+  const allBounds = displays.map(d => d.bounds);
+  return displays.map((d, i) => ({
+    id:        `display:${i}`,
+    name:      d.id === primaryId
+                 ? `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height})`
+                 : `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height})`,
+    isPrimary: d.id === primaryId,
+    bounds:    d.bounds,
+    allBounds,
+  }));
+});
 
 // ── Window controls ──────────────────────────────────────────
 ipcMain.on('win:minimize', () => mainWindow?.minimize());

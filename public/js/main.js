@@ -1089,8 +1089,45 @@ const COLOR_PRESETS = [
 ];
 
 // ── Screen share picker ───────────────────────────────────────
-function openScreenPicker() {
+const MONITOR_ICON = `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+const DESKTOP_ICON = `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="6" y="7" width="6" height="6" rx="1"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+
+async function openScreenPicker() {
+  const grid = $('sp-grid');
+  grid.innerHTML = '';
+  $('btn-sp-share').disabled = true;
   showModal('modal-screen');
+
+  // Base option: full desktop
+  const sources = [{ id: '__desktop__', name: 'Весь рабочий стол', icon: DESKTOP_ICON }];
+
+  // Add individual monitors
+  if (window.electronAPI?.getDisplays) {
+    try {
+      const displays = await window.electronAPI.getDisplays();
+      displays.forEach(d => sources.push({
+        id: d.id, name: d.name, icon: MONITOR_ICON,
+        bounds: d.bounds, allBounds: d.allBounds,
+      }));
+    } catch {}
+  }
+
+  sources.forEach(src => {
+    const item = document.createElement('div');
+    item.className = 'sp-item';
+    item.dataset.sourceId = src.id;
+    if (src.bounds)    item.dataset.bounds    = JSON.stringify(src.bounds);
+    if (src.allBounds) item.dataset.allBounds = JSON.stringify(src.allBounds);
+    item.innerHTML = `<div class="sp-item-thumb-empty">${src.icon}</div><div class="sp-item-name">${escHtml(src.name)}</div>`;
+    item.addEventListener('click', () => {
+      grid.querySelectorAll('.sp-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      $('btn-sp-share').disabled = false;
+    });
+    grid.appendChild(item);
+  });
+
+  grid.querySelector('.sp-item')?.click();
 }
 
 async function openSettings() {
@@ -1720,11 +1757,15 @@ function setupUI() {
 
   // Screen picker: share button
   $('btn-sp-share').addEventListener('click', async () => {
-    const quality = parseInt($('sp-quality').value, 10);
-    const audio   = $('sp-audio').checked;
-    const dims    = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
+    const quality   = parseInt($('sp-quality').value, 10);
+    const audio     = $('sp-audio').checked;
+    const dims      = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
+    const sel       = $('sp-grid').querySelector('.sp-item.selected');
+    const sourceId  = sel?.dataset.sourceId;
+    const bounds    = sel?.dataset.bounds    ? JSON.parse(sel.dataset.bounds)    : null;
+    const allBounds = sel?.dataset.allBounds ? JSON.parse(sel.dataset.allBounds) : null;
     hideModal('modal-screen');
-    await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
+    await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio, sourceId, bounds, allBounds });
   });
 
   // Wire voice.onScreenShare callback
