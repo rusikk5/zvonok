@@ -290,6 +290,14 @@ body:not(.auth-body){background:#0b0e11}
 .vbtn:active{transform:scale(.97)}
 .vbtn.on{background:rgba(88,101,242,0.15);color:#5865f2}
 .vbtn.muted{background:rgba(218,55,60,0.12);color:var(--live)}
+.voice-btns{position:relative}
+.vs-settings-panel{position:absolute;bottom:calc(100% + 8px);right:0;width:220px;background:#1e2124;border:1px solid #3a3c41;border-radius:10px;padding:12px;z-index:200;box-shadow:0 8px 24px #0008}
+.vs-sp-title{font-size:.78rem;font-weight:700;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.vs-sp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.83rem;color:var(--ink)}
+.vs-sp-sep{height:1px;background:#3a3c41;margin:10px 0}
+.vs-level-bar{position:relative;height:6px;background:#2b2d31;border-radius:3px;overflow:visible;margin-top:2px}
+.vs-level-fill{height:100%;border-radius:3px;background:#23a55a;transition:width .08s linear;width:0%}
+.vs-level-thresh{position:absolute;top:-3px;width:2px;height:12px;background:#fff;border-radius:1px;transform:translateX(-50%);transition:left .15s linear}
 
 /* Юзербар */
 .userbar{

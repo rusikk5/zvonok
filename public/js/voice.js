@@ -15,13 +15,16 @@ class VoiceEngine {
     this.speakerId       = null;
     this._volCtxs        = [];
 
-    this.onSpeaking   = null;
-    this.onUserLeft   = null;
-    this.onUserJoined = null;
+    this.onSpeaking     = null;
+    this.onUserLeft     = null;
+    this.onUserJoined   = null;
     this.onCameraChange = null;
+    this.onInputLevel   = null; // (level 0-100, threshold 0-100) for UI meter
 
     this.noiseSuppression = localStorage.getItem('zvonok_noise') !== 'false';
-    this.noiseThreshold   = parseInt(localStorage.getItem('zvonok_threshold') || '10', 10);
+    this.noiseThreshold   = parseInt(localStorage.getItem('zvonok_threshold') || '12', 10);
+    this.autoGate         = localStorage.getItem('zvonok_autogate') !== 'false';
+    this._noiseFloor      = 8; // running ambient estimate for auto mode
   }
 
   init(socket, userId) {
@@ -76,7 +79,21 @@ class VoiceEngine {
     };
     this.localStream = await navigator.mediaDevices.getUserMedia({ audio: audioOpts, video: false });
     this._watchVolume(this.localStream, (v) => {
-      if (this.onSpeaking) this.onSpeaking(this.myUserId, v > this.noiseThreshold && !this.muted);
+      // Auto gate: slowly track ambient noise floor during silence, set threshold above it
+      if (this.autoGate) {
+        if (v < this.noiseThreshold) {
+          this._noiseFloor = this._noiseFloor * 0.97 + v * 0.03;
+          this.noiseThreshold = Math.max(5, Math.round(this._noiseFloor * 2.8));
+        }
+      }
+      const isSpeaking = v > this.noiseThreshold && !this.muted;
+      if (this.onSpeaking) this.onSpeaking(this.myUserId, isSpeaking);
+      // Send level info to UI (0–100 scale, threshold on same scale)
+      if (this.onInputLevel) {
+        const lvl   = Math.min(100, Math.round(v / 60 * 100));
+        const thresh = Math.min(100, Math.round(this.noiseThreshold / 60 * 100));
+        this.onInputLevel(lvl, thresh);
+      }
     });
     this.socket.emit('voice:join', { roomId });
   }
@@ -208,7 +225,16 @@ class VoiceEngine {
 
   setSensitivity(threshold) {
     this.noiseThreshold = threshold;
+    this._noiseFloor    = threshold / 2.8;
     localStorage.setItem('zvonok_threshold', threshold);
+  }
+
+  setAutoGate(enabled) {
+    this.autoGate = enabled;
+    localStorage.setItem('zvonok_autogate', enabled);
+    if (!enabled) return;
+    // Reset noise floor estimate so auto mode adapts quickly
+    this._noiseFloor = this.noiseThreshold / 2.8;
   }
 
   async changeMic(deviceId) {

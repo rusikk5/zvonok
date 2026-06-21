@@ -1666,7 +1666,56 @@ function setupUI() {
   });
 
   // More voice options
-  $('btn-vs-more').addEventListener('click', () => toast('Дополнительные параметры', ''));
+  // Voice settings panel
+  const _vsPanel   = $('vs-settings-panel');
+  const _vsNoise   = $('vs-noise-chk');
+  const _vsAuto    = $('vs-auto-chk');
+  const _vsSens    = $('vs-sens');
+  const _vsSensVal = $('vs-sens-val');
+  const _vsManual  = $('vs-manual-row');
+
+  // Init from saved values
+  _vsNoise.checked = S.voice.noiseSuppression;
+  _vsAuto.checked  = S.voice.autoGate;
+  _vsSens.value    = S.voice.noiseThreshold;
+  _vsSensVal.textContent = S.voice.noiseThreshold;
+  if (S.voice.autoGate) _vsManual.classList.add('hidden');
+  else _vsManual.classList.remove('hidden');
+
+  $('btn-vs-more').addEventListener('click', (e) => {
+    e.stopPropagation();
+    _vsPanel.classList.toggle('hidden');
+  });
+  _vsPanel.addEventListener('click', e => e.stopPropagation());
+  document.addEventListener('click', () => _vsPanel.classList.add('hidden'));
+
+  _vsNoise.addEventListener('change', async (e) => {
+    await S.voice.setNoiseSuppression(e.target.checked);
+  });
+  _vsAuto.addEventListener('change', (e) => {
+    S.voice.setAutoGate(e.target.checked);
+    if (e.target.checked) _vsManual.classList.add('hidden');
+    else _vsManual.classList.remove('hidden');
+  });
+  _vsSens.addEventListener('input', (e) => {
+    const v = parseInt(e.target.value, 10);
+    _vsSensVal.textContent = v;
+    S.voice.setSensitivity(v);
+  });
+
+  // Level meter: update when in voice
+  S.voice.onInputLevel = (lvl, thresh) => {
+    const fill   = $('vs-level-fill');
+    const marker = $('vs-level-thresh');
+    if (!fill || !marker) return;
+    fill.style.width  = lvl + '%';
+    marker.style.left = thresh + '%';
+    // Also sync manual slider with auto-adjusted threshold
+    if (S.voice.autoGate) {
+      _vsSens.value = S.voice.noiseThreshold;
+      _vsSensVal.textContent = S.voice.noiseThreshold;
+    }
+  };
 
   // Stop screen share from card
   $('btn-screen-share-stop').addEventListener('click', () => {
