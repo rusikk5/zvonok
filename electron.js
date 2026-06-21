@@ -114,58 +114,13 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // Screen share handler: pre-selected source ID stored by renderer via IPC
-  mainWindow.webContents.session.setDisplayMediaRequestHandler(async (_req, callback) => {
-    if (_pendingScreenId) {
-      try {
-        const [sc, wn] = await Promise.all([
-          desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }),
-          desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }),
-        ]);
-        const src = [...sc, ...wn].find(s => s.id === _pendingScreenId);
-        _pendingScreenId = null;
-        if (src) { callback({ video: src }); return; }
-      } catch {}
-    }
-    _pendingScreenId = null;
-    // Fallback: no source selected or getSources empty — renderer uses getUserMedia
-    callback({ video: null });
-  });
+  // useSystemPicker: true → Windows GraphicsCapturePicker (no privacy permission needed, same as Discord)
+  // Handler only called if system picker is unavailable → renderer falls back to getUserMedia
+  mainWindow.webContents.session.setDisplayMediaRequestHandler(
+    (_req, callback) => { callback({ video: null }); },
+    { useSystemPicker: true },
+  );
 }
-
-// ── Screen share IPC ─────────────────────────────────────────
-ipcMain.handle('screen:sources', async () => {
-  // Try full enumeration first (requires Windows Privacy: Screen recording enabled)
-  try {
-    const [sc, wn] = await Promise.all([
-      desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 320, height: 180 } }),
-      desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 320, height: 180 } }),
-    ]);
-    if (sc.length || wn.length) {
-      return [
-        ...sc.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: true  })),
-        ...wn.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: false })),
-      ];
-    }
-  } catch {}
-
-  // Fallback: enumerate monitors via screen API (no privacy permission needed)
-  const displays   = screen.getAllDisplays();
-  const primaryId  = screen.getPrimaryDisplay().id;
-  const allBounds  = displays.map(d => d.bounds);
-  return displays.map((d, i) => ({
-    id:        `display:${i}`,
-    name:      d.id === primaryId
-                 ? `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height}, основной)`
-                 : `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height})`,
-    thumbnail: '',
-    isScreen:  true,
-    bounds:    d.bounds,
-    allBounds,
-  }));
-});
-
-ipcMain.handle('screen:select', async (_, id) => { _pendingScreenId = id; });
 
 // ── Window controls ──────────────────────────────────────────
 ipcMain.on('win:minimize', () => mainWindow?.minimize());

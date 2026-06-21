@@ -520,19 +520,12 @@
 
 <!-- Screen share picker -->
 <div class="modal-ov hidden" id="modal-screen">
-  <div class="modal" style="width:680px;max-width:96vw">
+  <div class="modal" style="width:380px;max-width:96vw">
     <div class="modal-hdr">
       Демонстрация экрана
       <button class="modal-x" data-close="modal-screen">✕</button>
     </div>
     <div class="modal-body">
-      <div class="sp-tabs" id="sp-tabs">
-        <button class="sp-tab active" data-type="screen">Весь экран</button>
-        <button class="sp-tab" data-type="window">Окно</button>
-      </div>
-      <div class="sp-grid" id="sp-grid">
-        <div class="sp-loading" id="sp-loading">Загружаю...</div>
-      </div>
       <div class="sp-opts">
         <div class="sp-opt-row">
           <span>Качество</span>
@@ -550,7 +543,7 @@
     </div>
     <div class="modal-foot" style="gap:8px">
       <button class="abtn outline" data-close="modal-screen">Отмена</button>
-      <button class="abtn" id="btn-sp-share" disabled>Поделиться</button>
+      <button class="abtn" id="btn-sp-share">Поделиться</button>
     </div>
   </div>
 </div>

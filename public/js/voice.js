@@ -336,30 +336,27 @@ class VoiceEngine {
   }
 
   // ── Screen share ──────────────────────────────────────────
-  async startScreenShare({ width, height, fps, audio, sourceId, displayBounds, allDisplayBounds }) {
+  async startScreenShare({ width, height, fps, audio }) {
     if (this.screenStream) return;
 
     try {
-      if (sourceId && !sourceId.startsWith('display:') && sourceId !== '__desktop__') {
-        // Real desktopCapturer source — Electron handler has it pre-selected
-        this.screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps } },
-          audio: !!audio,
-        });
-      } else if (displayBounds && allDisplayBounds) {
-        // Display from getAllDisplays(): capture full desktop then crop to bounds
-        this.screenStream = await this._captureDisplayRegion({ width, height, fps, displayBounds, allDisplayBounds });
-      } else {
-        // Full desktop (no specific source or browser)
+      // getDisplayMedia → useSystemPicker in Electron handler shows Windows native picker (like Discord)
+      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps } },
+        audio: !!audio,
+      });
+    } catch(e) {
+      if (e.name === 'NotAllowedError') return; // user cancelled
+      // System picker unavailable (handler returned null) → fall back to full desktop
+      try {
         this.screenStream = await navigator.mediaDevices.getUserMedia({
           video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: width, maxHeight: height, maxFrameRate: fps } },
           audio: false,
         });
+      } catch(e2) {
+        if (this.onScreenShareError) this.onScreenShareError(e2.message || String(e2));
+        return;
       }
-    } catch(e) {
-      if (e.name !== 'NotAllowedError' && e.name !== 'NotSupportedError')
-        if (this.onScreenShareError) this.onScreenShareError(e.message || String(e));
-      return;
     }
 
     const track = this.screenStream.getVideoTracks()[0];
@@ -389,56 +386,6 @@ class VoiceEngine {
 
     if (this.roomId) this.socket.emit('screen:stop', { roomId: this.roomId });
     if (this.onScreenShare) this.onScreenShare(false, null);
-  }
-
-  async _captureDisplayRegion({ width, height, fps, displayBounds, allDisplayBounds }) {
-    // Capture the entire virtual desktop, then crop to the selected display's bounds
-    const fullStream = await navigator.mediaDevices.getUserMedia({
-      video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: 3840, maxHeight: 2160, maxFrameRate: fps } },
-      audio: false,
-    });
-
-    const minX = Math.min(...allDisplayBounds.map(b => b.x));
-    const minY = Math.min(...allDisplayBounds.map(b => b.y));
-    const maxX = Math.max(...allDisplayBounds.map(b => b.x + b.width));
-    const maxY = Math.max(...allDisplayBounds.map(b => b.y + b.height));
-    const totalW = maxX - minX;
-    const totalH = maxY - minY;
-
-    const video = document.createElement('video');
-    video.srcObject = fullStream;
-    video.muted = true;
-    await new Promise(r => { video.onloadedmetadata = r; video.play().catch(() => {}); });
-
-    const outW = Math.min(width,  displayBounds.width);
-    const outH = Math.min(height, displayBounds.height);
-    const canvas = document.createElement('canvas');
-    canvas.width  = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext('2d');
-
-    let raf;
-    const scaleX = () => video.videoWidth  / totalW;
-    const scaleY = () => video.videoHeight / totalH;
-    const draw = () => {
-      ctx.drawImage(video,
-        (displayBounds.x - minX) * scaleX(), (displayBounds.y - minY) * scaleY(),
-        displayBounds.width * scaleX(),       displayBounds.height * scaleY(),
-        0, 0, outW, outH,
-      );
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-
-    const cropped = canvas.captureStream(fps);
-    const cleanup = () => {
-      cancelAnimationFrame(raf);
-      fullStream.getTracks().forEach(t => t.stop());
-      video.srcObject = null;
-    };
-    cropped.getVideoTracks()[0]?.addEventListener('ended', cleanup);
-    // Expose cleanup so stopScreenShare can call it via track.stop()
-    return cropped;
   }
 
   async setNoiseSuppression(enabled) {

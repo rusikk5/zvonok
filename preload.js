@@ -12,6 +12,4 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateReady: (cb) => ipcRenderer.on('update:ready', (_e, version) => cb(version)),
   installUpdate: () => ipcRenderer.send('update:install'),
   checkUpdate:   () => ipcRenderer.invoke('update:check'),
-  getScreenSources: ()   => ipcRenderer.invoke('screen:sources'),
-  selectScreen:     (id) => ipcRenderer.invoke('screen:select', id),
 });

@@ -1089,66 +1089,8 @@ const COLOR_PRESETS = [
 ];
 
 // ── Screen share picker ───────────────────────────────────────
-let _spAllSources  = [];
-let _spCurrentType = 'screen';
-
-async function openScreenPicker() {
-  _spAllSources = [];
-  _spCurrentType = 'screen';
-  $('btn-sp-share').disabled = true;
-  const grid = $('sp-grid');
-  grid.innerHTML = '<div class="sp-loading">Загружаю...</div>';
+function openScreenPicker() {
   showModal('modal-screen');
-
-  if (window.electronAPI?.getScreenSources) {
-    try { _spAllSources = await window.electronAPI.getScreenSources(); } catch {}
-  }
-
-  if (!_spAllSources.length) {
-    _spAllSources = [{ id: '__desktop__', name: 'Весь рабочий стол', thumbnail: '', isScreen: true }];
-  }
-
-  // Show "Окно" tab only if window sources are available
-  const hasWindows = _spAllSources.some(s => !s.isScreen);
-  const tabs = $('sp-tabs');
-  tabs.querySelectorAll('.sp-tab').forEach(t => {
-    if (t.dataset.type === 'window') t.classList.toggle('hidden', !hasWindows);
-    else t.classList.add('active');
-    t.classList.toggle('active', t.dataset.type === 'screen');
-  });
-
-  _spPopulateGrid('screen');
-}
-
-function _spPopulateGrid(type) {
-  _spCurrentType = type;
-  const grid = $('sp-grid');
-  const list = _spAllSources.filter(s => type === 'screen' ? s.isScreen : !s.isScreen);
-  grid.innerHTML = '';
-
-  if (!list.length) {
-    grid.innerHTML = `<div class="sp-loading">Нет доступных окон.<br><span style="font-size:.78rem;color:var(--ink-faint)">Включи Параметры → Конфиденциальность → Запись экрана и приложений</span></div>`;
-    return;
-  }
-
-  list.forEach(src => {
-    const item = document.createElement('div');
-    item.className = 'sp-item';
-    item.dataset.sourceId = src.id;
-    if (src.bounds)    item.dataset.bounds    = JSON.stringify(src.bounds);
-    if (src.allBounds) item.dataset.allBounds = JSON.stringify(src.allBounds);
-    const img = src.thumbnail
-      ? `<img src="${src.thumbnail}" alt="">`
-      : `<div class="sp-item-thumb-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>`;
-    item.innerHTML = `${img}<div class="sp-item-name">${escHtml(src.name)}</div>`;
-    item.addEventListener('click', () => {
-      grid.querySelectorAll('.sp-item').forEach(i => i.classList.remove('selected'));
-      item.classList.add('selected');
-      $('btn-sp-share').disabled = false;
-    });
-    grid.appendChild(item);
-  });
-  grid.querySelector('.sp-item')?.click();
 }
 
 async function openSettings() {
@@ -1776,36 +1718,13 @@ function setupUI() {
     else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
   });
 
-  // Screen picker: tabs
-  $('sp-tabs').addEventListener('click', (e) => {
-    const tab = e.target.closest('.sp-tab');
-    if (!tab) return;
-    $('sp-tabs').querySelectorAll('.sp-tab').forEach(t => t.classList.remove('active'));
-    tab.classList.add('active');
-    _spPopulateGrid(tab.dataset.type);
-  });
-
   // Screen picker: share button
   $('btn-sp-share').addEventListener('click', async () => {
     const quality = parseInt($('sp-quality').value, 10);
     const audio   = $('sp-audio').checked;
     const dims    = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
-    const sel     = $('sp-grid').querySelector('.sp-item.selected');
-    const selId   = sel?.dataset.sourceId;
-    const bounds    = sel?.dataset.bounds    ? JSON.parse(sel.dataset.bounds)    : null;
-    const allBounds = sel?.dataset.allBounds ? JSON.parse(sel.dataset.allBounds) : null;
     hideModal('modal-screen');
-
-    if (selId && !selId.startsWith('display:') && selId !== '__desktop__' && window.electronAPI?.selectScreen) {
-      await window.electronAPI.selectScreen(selId);
-    }
-
-    await S.voice.startScreenShare({
-      width: dims[0], height: dims[1], fps: dims[2], audio,
-      sourceId: selId,
-      displayBounds: bounds,
-      allDisplayBounds: allBounds,
-    });
+    await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
   });
 
   // Wire voice.onScreenShare callback
