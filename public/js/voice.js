@@ -336,19 +336,25 @@ class VoiceEngine {
   }
 
   // ── Screen share ──────────────────────────────────────────
-  async startScreenShare({ width, height, fps, audio }) {
+  async startScreenShare({ width, height, fps, audio, useDesktop }) {
     if (this.screenStream) return;
 
     try {
-      this.screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps } },
-        audio: !!audio,
-      });
-    } catch(e) {
-      // NotAllowedError = user cancelled; NotSupportedError = handler rejected (also cancel)
-      if (e.name !== 'NotAllowedError' && e.name !== 'NotSupportedError') {
-        if (this.onScreenShareError) this.onScreenShareError(e.message || String(e));
+      if (useDesktop) {
+        // Fallback path: legacy chromeMediaSource (no source picker needed, no privacy issues)
+        this.screenStream = await navigator.mediaDevices.getUserMedia({
+          video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: width, maxHeight: height, maxFrameRate: fps } },
+          audio: false,
+        });
+      } else {
+        this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: fps } },
+          audio: !!audio,
+        });
       }
+    } catch(e) {
+      if (e.name !== 'NotAllowedError' && e.name !== 'NotSupportedError')
+        if (this.onScreenShareError) this.onScreenShareError(e.message || String(e));
       return;
     }
 

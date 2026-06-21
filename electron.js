@@ -3,10 +3,11 @@ const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electr
 const path = require('path');
 const { PROD_SERVER_URL } = require('./config');
 
-let mainWindow  = null;
-let prevBounds  = null;
-let dragState   = null;
-let splashWin   = null;
+let mainWindow       = null;
+let prevBounds       = null;
+let dragState        = null;
+let splashWin        = null;
+let _pendingScreenId = null;
 
 // ── Update window (shown during download) ───────────────────────
 function createSplash(msg) {
@@ -113,38 +114,40 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  // Screen share: get sources inside handler context, show IPC-based picker in renderer
+  // Screen share handler: pre-selected source ID stored by renderer via IPC
   mainWindow.webContents.session.setDisplayMediaRequestHandler(async (_req, callback) => {
-    try {
-      const [screens, windows] = await Promise.all([
-        desktopCapturer.getSources({ types: ['screen'],  thumbnailSize: { width: 320, height: 180 } }),
-        desktopCapturer.getSources({ types: ['window'],  thumbnailSize: { width: 320, height: 180 } }),
-      ]);
-      const all = [
-        ...screens.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: true  })),
-        ...windows.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: false })),
-      ];
-
-      if (!all.length) { callback({ video: null }); return; }
-
-      // Send sources to renderer and wait for user selection
-      mainWindow.webContents.send('screen:sources', all);
-      const selectedId = await new Promise((resolve) => {
-        const onPick   = (_, id) => { ipcMain.removeListener('screen:cancel', onCancel); resolve(id);   };
-        const onCancel = ()      => { ipcMain.removeListener('screen:pick',   onPick);   resolve(null); };
-        ipcMain.once('screen:pick',   onPick);
-        ipcMain.once('screen:cancel', onCancel);
-      });
-
-      if (!selectedId) { callback({ video: null }); return; }
-      const src = [...screens, ...windows].find(s => s.id === selectedId);
-      callback({ video: src || screens[0] });
-    } catch(e) {
-      console.error('[screen handler]', e);
-      callback({ video: null });
+    if (_pendingScreenId) {
+      try {
+        const [sc, wn] = await Promise.all([
+          desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } }),
+          desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 0, height: 0 } }),
+        ]);
+        const src = [...sc, ...wn].find(s => s.id === _pendingScreenId);
+        _pendingScreenId = null;
+        if (src) { callback({ video: src }); return; }
+      } catch {}
     }
+    _pendingScreenId = null;
+    // Fallback: no source selected or getSources empty — renderer uses getUserMedia
+    callback({ video: null });
   });
 }
+
+// ── Screen share IPC ─────────────────────────────────────────
+ipcMain.handle('screen:sources', async () => {
+  try {
+    const [sc, wn] = await Promise.all([
+      desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 320, height: 180 } }),
+      desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 320, height: 180 } }),
+    ]);
+    return [
+      ...sc.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: true  })),
+      ...wn.map(s => ({ id: s.id, name: s.name, thumbnail: s.thumbnail.toDataURL(), isScreen: false })),
+    ];
+  } catch { return []; }
+});
+
+ipcMain.handle('screen:select', async (_, id) => { _pendingScreenId = id; });
 
 // ── Window controls ──────────────────────────────────────────
 ipcMain.on('win:minimize', () => mainWindow?.minimize());

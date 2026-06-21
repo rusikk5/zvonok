@@ -523,38 +523,34 @@
   <div class="modal" style="width:680px;max-width:96vw">
     <div class="modal-hdr">
       Демонстрация экрана
-      <button id="btn-sp-x" class="modal-x">✕</button>
+      <button class="modal-x" data-close="modal-screen">✕</button>
     </div>
     <div class="modal-body">
-      <!-- Step 1: options (shown first) -->
-      <div id="sp-step-opts">
-        <div class="sp-opts">
-          <div class="sp-opt-row">
-            <span>Качество</span>
-            <select id="sp-quality" class="dev-select" style="width:auto">
-              <option value="480">480p</option>
-              <option value="720" selected>720p</option>
-              <option value="1080">1080p</option>
-            </select>
-          </div>
-          <div class="sp-opt-row">
-            <span>Звук системы</span>
-            <label class="tog"><input type="checkbox" id="sp-audio"><span class="tog-slider"></span></label>
-          </div>
-        </div>
+      <div class="sp-tabs" id="sp-tabs">
+        <button class="sp-tab active" data-type="screen">Весь экран</button>
+        <button class="sp-tab" data-type="window">Окно</button>
       </div>
-      <!-- Step 2: source picker (shown after getSources returns, Electron only) -->
-      <div id="sp-step-pick" class="hidden">
-        <div class="sp-tabs" id="sp-tabs">
-          <button class="sp-tab active" data-type="screen">Весь экран</button>
-          <button class="sp-tab" data-type="window">Окно</button>
+      <div class="sp-grid" id="sp-grid">
+        <div class="sp-loading" id="sp-loading">Загружаю...</div>
+      </div>
+      <div class="sp-opts">
+        <div class="sp-opt-row">
+          <span>Качество</span>
+          <select id="sp-quality" class="dev-select" style="width:auto">
+            <option value="480">480p</option>
+            <option value="720" selected>720p</option>
+            <option value="1080">1080p</option>
+          </select>
         </div>
-        <div class="sp-grid" id="sp-grid"></div>
+        <div class="sp-opt-row">
+          <span>Звук системы</span>
+          <label class="tog"><input type="checkbox" id="sp-audio"><span class="tog-slider"></span></label>
+        </div>
       </div>
     </div>
     <div class="modal-foot" style="gap:8px">
-      <button class="abtn outline" id="btn-sp-cancel">Отмена</button>
-      <button class="abtn" id="btn-sp-share">Выбрать источник</button>
+      <button class="abtn outline" data-close="modal-screen">Отмена</button>
+      <button class="abtn" id="btn-sp-share" disabled>Поделиться</button>
     </div>
   </div>
 </div>

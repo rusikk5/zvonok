@@ -306,6 +306,8 @@ body:not(.auth-body){background:#0b0e11}
 .sp-item:hover{border-color:#4d5057}
 .sp-item.selected{border-color:#5865f2}
 .sp-item img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#111}
+.sp-item-thumb-empty{width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;background:#1a1b1e;color:#4d5057}
+.sp-loading{color:var(--ink-faint);font-size:.83rem;text-align:center;padding:24px;grid-column:1/-1}
 .sp-item-name{font-size:.73rem;color:var(--ink-dim);padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sp-browser-hint{color:var(--ink-faint);font-size:.83rem;padding:24px 0;text-align:center;grid-column:1/-1}
 .sp-opts{display:flex;flex-direction:column;gap:10px;padding-top:4px;border-top:1px solid #2b2d31}

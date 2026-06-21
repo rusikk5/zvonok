@@ -1089,40 +1089,49 @@ const COLOR_PRESETS = [
 ];
 
 // ── Screen share picker ───────────────────────────────────────
-let _spAllSources = [];
+let _spAllSources  = [];
+let _spCurrentType = 'screen';
 
-function openScreenPicker() {
-  // Reset to step 1
-  $('sp-step-opts').classList.remove('hidden');
-  $('sp-step-pick').classList.add('hidden');
-  $('btn-sp-share').textContent = 'Выбрать источник';
-  $('btn-sp-share').disabled = false;
+async function openScreenPicker() {
   _spAllSources = [];
+  _spCurrentType = 'screen';
+  $('sp-tabs').querySelectorAll('.sp-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  $('btn-sp-share').disabled = true;
+  const grid = $('sp-grid');
+  grid.innerHTML = '<div class="sp-loading">Загружаю...</div>';
   showModal('modal-screen');
-}
 
-function _spShowSources(sources) {
-  _spAllSources = sources;
-  $('sp-step-opts').classList.add('hidden');
-  $('sp-step-pick').classList.remove('hidden');
-  $('btn-sp-share').textContent = 'Поделиться';
-  $('btn-sp-share').disabled = true; // enable on selection
+  if (window.electronAPI?.getScreenSources) {
+    try { _spAllSources = await window.electronAPI.getScreenSources(); } catch {}
+  }
+
+  if (!_spAllSources.length) {
+    // Fallback: show a single "Full Desktop" tile — will use getUserMedia
+    _spAllSources = [{ id: '__desktop__', name: 'Весь рабочий стол', thumbnail: '', isScreen: true }];
+  }
+
   _spPopulateGrid('screen');
 }
 
 function _spPopulateGrid(type) {
+  _spCurrentType = type;
   const grid = $('sp-grid');
-  const filtered = _spAllSources.filter(s => type === 'screen' ? s.isScreen : !s.isScreen);
+  const list = _spAllSources.filter(s => type === 'screen' ? s.isScreen : !s.isScreen);
   grid.innerHTML = '';
-  if (!filtered.length) {
-    grid.innerHTML = '<div style="color:var(--ink-faint);text-align:center;padding:20px;grid-column:1/-1;font-size:.83rem">Нет источников</div>';
+
+  if (!list.length) {
+    grid.innerHTML = '<div class="sp-loading">Нет источников</div>';
     return;
   }
-  filtered.forEach(src => {
+
+  list.forEach(src => {
     const item = document.createElement('div');
     item.className = 'sp-item';
     item.dataset.sourceId = src.id;
-    item.innerHTML = `<img src="${src.thumbnail}" alt=""><div class="sp-item-name">${escHtml(src.name)}</div>`;
+    const img = src.thumbnail
+      ? `<img src="${src.thumbnail}" alt="">`
+      : `<div class="sp-item-thumb-empty"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>`;
+    item.innerHTML = `${img}<div class="sp-item-name">${escHtml(src.name)}</div>`;
     item.addEventListener('click', () => {
       grid.querySelectorAll('.sp-item').forEach(i => i.classList.remove('selected'));
       item.classList.add('selected');
@@ -1130,7 +1139,6 @@ function _spPopulateGrid(type) {
     });
     grid.appendChild(item);
   });
-  // Auto-select first
   grid.querySelector('.sp-item')?.click();
 }
 
@@ -1768,55 +1776,24 @@ function setupUI() {
     _spPopulateGrid(tab.dataset.type);
   });
 
-  // Screen picker: cancel/close
-  const _spCancel = () => {
-    hideModal('modal-screen');
-    if (window.electronAPI?.cancelScreen) window.electronAPI.cancelScreen();
-  };
-  $('btn-sp-cancel').addEventListener('click', _spCancel);
-  $('btn-sp-x').addEventListener('click', _spCancel);
-
   // Screen picker: share button
   $('btn-sp-share').addEventListener('click', async () => {
-    const quality = parseInt($('sp-quality').value, 10);
-    const audio   = $('sp-audio').checked;
-    const dims = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
+    const quality    = parseInt($('sp-quality').value, 10);
+    const audio      = $('sp-audio').checked;
+    const dims       = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
+    const selectedId = $('sp-grid').querySelector('.sp-item.selected')?.dataset.sourceId;
+    hideModal('modal-screen');
 
-    if ($('sp-step-pick').classList.contains('hidden')) {
-      // Step 1: "Выбрать источник" — start getDisplayMedia (Electron will show picker via handler)
-      // For non-Electron: just proceed directly
-      if (!window.electronAPI?.onScreenSources) {
-        hideModal('modal-screen');
-        await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
-      } else {
-        // Electron: call startScreenShare which triggers handler which sends screen:sources
-        $('btn-sp-share').disabled = true;
-        $('btn-sp-share').textContent = 'Загружаю...';
-        // startScreenShare will await getDisplayMedia which awaits IPC pick
-        S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio });
-        // don't await — modal stays open while handler waits for our pick IPC
-      }
-    } else {
-      // Step 2: source selected — send pick IPC
-      const selectedId = $('sp-grid').querySelector('.sp-item.selected')?.dataset.sourceId;
-      if (!selectedId) return;
-      hideModal('modal-screen');
-      if (window.electronAPI?.pickScreen) window.electronAPI.pickScreen(selectedId);
+    if (selectedId && selectedId !== '__desktop__' && window.electronAPI?.selectScreen) {
+      // Electron: pre-select source, then getDisplayMedia triggers handler
+      await window.electronAPI.selectScreen(selectedId);
     }
-  });
 
-  // Electron: receive sources from handler and switch to picker view
-  if (window.electronAPI?.onScreenSources) {
-    window.electronAPI.onScreenSources((sources) => {
-      if (!sources?.length) {
-        hideModal('modal-screen');
-        toast('Не удалось получить список источников. Проверь Параметры Windows → Конфиденциальность → Запись экрана', 'error');
-        if (window.electronAPI?.cancelScreen) window.electronAPI.cancelScreen();
-        return;
-      }
-      _spShowSources(sources);
+    await S.voice.startScreenShare({
+      width: dims[0], height: dims[1], fps: dims[2], audio,
+      useDesktop: selectedId === '__desktop__' || !selectedId,
     });
-  }
+  });
 
   // Wire voice.onScreenShare callback
   S.voice.onScreenShare = (sharing, _stream) => {
