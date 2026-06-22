@@ -563,6 +563,17 @@
   <video id="screen-ov-video" autoplay playsinline muted></video>
 </div>
 
+<!-- Own screen share preview (self-view) -->
+<div class="screen-ov screen-self hidden" id="screen-self-ov">
+  <div class="screen-ov-bar">
+    <span>Вы демонстрируете экран</span>
+    <div style="display:flex;gap:6px">
+      <button class="screen-ov-btn" id="btn-self-stop" title="Остановить демонстрацию">✕</button>
+    </div>
+  </div>
+  <video id="screen-self-video" autoplay playsinline muted></video>
+</div>
+
 <!-- Настройки комнаты -->
 <div class="modal-ov hidden" id="modal-room-set">
   <div class="modal">

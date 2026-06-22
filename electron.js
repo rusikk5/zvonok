@@ -120,16 +120,33 @@ function createWindow() {
 }
 
 // ── Screen sources IPC ───────────────────────────────────────
-ipcMain.handle('screen:displays', () => {
+ipcMain.handle('screen:sources', async () => {
+  // Preferred: real desktopCapturer sources (direct capture via chromeMediaSourceId, with thumbnails)
+  try {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+    });
+    if (sources.length) {
+      return sources.map(s => ({
+        id:        s.id,                       // e.g. "screen:0:0" or "window:..."
+        name:      s.name,
+        thumbnail: s.thumbnail.toDataURL(),
+        isScreen:  s.id.startsWith('screen:'),
+        direct:    true,                       // capture via chromeMediaSourceId
+      }));
+    }
+  } catch {}
+
+  // Fallback: enumerate monitors via screen API (no privacy permission) → canvas crop
   const displays  = screen.getAllDisplays();
-  const primaryId = screen.getPrimaryDisplay().id;
   const allBounds = displays.map(d => d.bounds);
   return displays.map((d, i) => ({
     id:        `display:${i}`,
-    name:      d.id === primaryId
-                 ? `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height})`
-                 : `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height})`,
-    isPrimary: d.id === primaryId,
+    name:      `Экран ${i + 1}  (${d.bounds.width}×${d.bounds.height})`,
+    thumbnail: '',
+    isScreen:  true,
+    direct:    false,
     bounds:    d.bounds,
     allBounds,
   }));

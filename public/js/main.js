@@ -1094,31 +1094,37 @@ const DESKTOP_ICON = `<svg width="36" height="36" viewBox="0 0 24 24" fill="none
 
 async function openScreenPicker() {
   const grid = $('sp-grid');
-  grid.innerHTML = '';
+  grid.innerHTML = '<div class="sp-loading">Загружаю источники…</div>';
   $('btn-sp-share').disabled = true;
   showModal('modal-screen');
 
-  // Base option: full desktop
-  const sources = [{ id: '__desktop__', name: 'Весь рабочий стол', icon: DESKTOP_ICON }];
+  // Always offer full desktop as the first, always-working option
+  const sources = [{ id: '__desktop__', name: 'Весь рабочий стол', icon: DESKTOP_ICON, direct: false }];
 
-  // Add individual monitors
-  if (window.electronAPI?.getDisplays) {
+  if (window.electronAPI?.getScreenSources) {
     try {
-      const displays = await window.electronAPI.getDisplays();
-      displays.forEach(d => sources.push({
-        id: d.id, name: d.name, icon: MONITOR_ICON,
-        bounds: d.bounds, allBounds: d.allBounds,
+      const list = await window.electronAPI.getScreenSources();
+      list.forEach(s => sources.push({
+        id: s.id, name: s.name,
+        thumbnail: s.thumbnail, direct: s.direct,
+        icon: s.isScreen ? MONITOR_ICON : DESKTOP_ICON,
+        bounds: s.bounds, allBounds: s.allBounds,
       }));
     } catch {}
   }
 
+  grid.innerHTML = '';
   sources.forEach(src => {
     const item = document.createElement('div');
     item.className = 'sp-item';
     item.dataset.sourceId = src.id;
+    item.dataset.direct   = src.direct ? '1' : '';
     if (src.bounds)    item.dataset.bounds    = JSON.stringify(src.bounds);
     if (src.allBounds) item.dataset.allBounds = JSON.stringify(src.allBounds);
-    item.innerHTML = `<div class="sp-item-thumb-empty">${src.icon}</div><div class="sp-item-name">${escHtml(src.name)}</div>`;
+    const thumb = src.thumbnail
+      ? `<img src="${src.thumbnail}" alt="">`
+      : `<div class="sp-item-thumb-empty">${src.icon}</div>`;
+    item.innerHTML = `${thumb}<div class="sp-item-name">${escHtml(src.name)}</div>`;
     item.addEventListener('click', () => {
       grid.querySelectorAll('.sp-item').forEach(i => i.classList.remove('selected'));
       item.classList.add('selected');
@@ -1762,28 +1768,43 @@ function setupUI() {
     const dims      = { 480: [854, 480, 15], 720: [1280, 720, 30], 1080: [1920, 1080, 30] }[quality] || [1280, 720, 30];
     const sel       = $('sp-grid').querySelector('.sp-item.selected');
     const sourceId  = sel?.dataset.sourceId;
+    const direct    = sel?.dataset.direct === '1';
     const bounds    = sel?.dataset.bounds    ? JSON.parse(sel.dataset.bounds)    : null;
     const allBounds = sel?.dataset.allBounds ? JSON.parse(sel.dataset.allBounds) : null;
     hideModal('modal-screen');
-    await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio, sourceId, bounds, allBounds });
+    await S.voice.startScreenShare({ width: dims[0], height: dims[1], fps: dims[2], audio, sourceId, direct, bounds, allBounds });
   });
 
+  $('btn-self-stop').addEventListener('click', () => S.voice.stopScreenShare());
+
   // Wire voice.onScreenShare callback
-  S.voice.onScreenShare = (sharing, _stream) => {
+  S.voice.onScreenShare = (sharing, stream) => {
     $('btn-vs-screen').classList.toggle('sharing', sharing);
     $('vs-sharing').classList.toggle('hidden', !sharing);
     $('screen-card').classList.toggle('hidden', !sharing);
+    const selfOv  = $('screen-self-ov');
+    const selfVid = $('screen-self-video');
+    if (sharing && stream) {
+      selfVid.srcObject = stream;
+      selfVid.play().catch(() => {});
+      selfOv.classList.remove('hidden');
+    } else {
+      selfVid.srcObject = null;
+      selfOv.classList.add('hidden');
+    }
   };
 
   S.voice.onScreenShareError = (msg) => toast('Демонстрация экрана: ' + msg, 'error');
 
   // Wire voice.onRemoteScreen callback
   S.voice.onRemoteScreen = (userId, stream) => {
-    const ov = $('screen-ov');
-    if (!stream) { ov.classList.add('hidden'); return; }
+    const ov  = $('screen-ov');
+    const vid = $('screen-ov-video');
+    if (!stream) { vid.srcObject = null; ov.classList.add('hidden'); return; }
     const user = (S.members || []).find(m => m.id === userId);
     $('screen-ov-who').textContent = (user?.name || 'Участник') + ' демонстрирует экран';
-    $('screen-ov-video').srcObject = stream;
+    vid.srcObject = stream;
+    vid.play().catch(() => {});
     ov.classList.remove('hidden');
   };
 

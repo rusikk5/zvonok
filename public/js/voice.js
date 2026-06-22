@@ -51,35 +51,34 @@ class VoiceEngine {
       if (this.onUserJoined) this.onUserJoined(userId);
     });
 
+    // Perfect negotiation: handles offer/answer collisions (glare) during renegotiation
     this.socket.on('voice:offer', async ({ from, fromUser, offer }) => {
-      if (this.peers.has(from)) {
-        // Renegotiation on existing peer (e.g. screen share added)
-        const { pc } = this.peers.get(from);
-        try {
-          await pc.setRemoteDescription(offer);
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          this.socket.emit('voice:answer', { to: from, answer });
-        } catch {}
-        return;
-      }
-      // New peer connection
-      const pc = this._makePeer(from, fromUser);
-      await pc.setRemoteDescription(offer);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      this.socket.emit('voice:answer', { to: from, answer });
+      let peer = this.peers.get(from);
+      if (!peer) { this._makePeer(from, fromUser); peer = this.peers.get(from); }
+      const pc = peer.pc;
+
+      const collision = peer.makingOffer || pc.signalingState !== 'stable';
+      peer.ignoreOffer = !peer.polite && collision;
+      if (peer.ignoreOffer) return;   // impolite peer wins, ignores incoming offer
+
+      try {
+        await pc.setRemoteDescription(offer);   // polite peer auto-rolls back on collision
+        await pc.setLocalDescription();          // implicit answer
+        this.socket.emit('voice:answer', { to: from, answer: pc.localDescription });
+      } catch (e) { console.warn('[voice:offer]', e); }
     });
 
     this.socket.on('voice:answer', async ({ from, answer }) => {
       const peer = this.peers.get(from);
-      if (peer && peer.pc.signalingState === 'have-local-offer')
-        await peer.pc.setRemoteDescription(answer).catch(() => {});
+      if (!peer) return;
+      try { await peer.pc.setRemoteDescription(answer); } catch (e) { console.warn('[voice:answer]', e); }
     });
 
     this.socket.on('voice:ice', async ({ from, candidate }) => {
       const peer = this.peers.get(from);
-      if (peer && candidate) await peer.pc.addIceCandidate(candidate).catch(() => {});
+      if (!peer || !candidate) return;
+      try { await peer.pc.addIceCandidate(candidate); }
+      catch (e) { if (!peer.ignoreOffer) console.warn('[voice:ice]', e); }
     });
 
     this.socket.on('voice:left', ({ userId, socketId }) => {
@@ -205,11 +204,9 @@ class VoiceEngine {
     this.roomId = null;
   }
 
-  async _offer(socketId, userId) {
-    const pc    = this._makePeer(socketId, userId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    this.socket.emit('voice:offer', { to: socketId, offer });
+  _offer(socketId, userId) {
+    // Initiator: just create the peer; addTrack triggers onnegotiationneeded → sends offer
+    this._makePeer(socketId, userId);
   }
 
   _makePeer(socketId, userId) {
@@ -222,16 +219,9 @@ class VoiceEngine {
       ]
     });
 
-    if (this.localStream)
-      this.localStream.getTracks().forEach(t => pc.addTrack(t, this.localStream));
-    if (this.localVideoStream)
-      this.localVideoStream.getTracks().forEach(t => pc.addTrack(t, this.localVideoStream));
-    if (this.screenStream) {
-      this.screenStream.getTracks().forEach(t => {
-        const sender = pc.addTrack(t, this.screenStream);
-        this._screenSenders.set(socketId, sender);
-      });
-    }
+    // Deterministic politeness: exactly one side is polite (compares own vs remote socket id)
+    const peer = { pc, userId, polite: (this.socket.id || '') > socketId, makingOffer: false, ignoreOffer: false };
+    this.peers.set(socketId, peer);
 
     const audio = document.createElement('audio');
     audio.autoplay = true; audio.playsInline = true;
@@ -241,9 +231,15 @@ class VoiceEngine {
 
     pc.ontrack = (e) => {
       if (e.track.kind === 'audio') {
-        const stream = e.streams[0] || new MediaStream([e.track]);
-        audio.srcObject = stream;
-        this._watchVolume(stream, (v) => {
+        // Accumulate all audio tracks (mic + system audio) into one playback stream
+        if (!peer.recvAudio) peer.recvAudio = new MediaStream();
+        peer.recvAudio.addTrack(e.track);
+        audio.srcObject = peer.recvAudio;
+        audio.play().catch(() => {});
+        e.track.addEventListener('ended', () => {
+          try { peer.recvAudio.removeTrack(e.track); } catch {}
+        });
+        this._watchVolume(new MediaStream([e.track]), (v) => {
           if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
         });
       } else if (e.track.kind === 'video') {
@@ -259,27 +255,36 @@ class VoiceEngine {
       if (candidate) this.socket.emit('voice:ice', { to: socketId, candidate });
     };
 
-    // Handle renegotiation (triggered when screen share track is added)
-    let _negotiating = false;
     pc.onnegotiationneeded = async () => {
-      if (pc.signalingState !== 'stable' || _negotiating) return;
-      _negotiating = true;
       try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        this.socket.emit('voice:offer', { to: socketId, offer });
-      } catch {}
-      _negotiating = false;
+        peer.makingOffer = true;
+        await pc.setLocalDescription();   // implicit offer
+        this.socket.emit('voice:offer', { to: socketId, offer: pc.localDescription });
+      } catch (e) { console.warn('[negotiationneeded]', e); }
+      finally { peer.makingOffer = false; }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed') { try { pc.restartIce(); } catch {} }
     };
 
     pc.onconnectionstatechange = () => {
-      if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
+      if (['failed', 'closed'].includes(pc.connectionState)) {
         this._cleanPeer(socketId);
         if (this.onUserLeft) this.onUserLeft(userId);
       }
     };
 
-    this.peers.set(socketId, { pc, userId });
+    // Add local tracks LAST so handlers (incl. onnegotiationneeded) are wired first
+    if (this.localStream)
+      this.localStream.getTracks().forEach(t => pc.addTrack(t, this.localStream));
+    if (this.localVideoStream)
+      this.localVideoStream.getTracks().forEach(t => pc.addTrack(t, this.localVideoStream));
+    if (this.screenStream) {
+      const senders = this.screenStream.getTracks().map(t => pc.addTrack(t, this.screenStream));
+      this._screenSenders.set(socketId, senders);
+    }
+
     return pc;
   }
 
@@ -336,13 +341,31 @@ class VoiceEngine {
   }
 
   // ── Screen share ──────────────────────────────────────────
-  async startScreenShare({ width, height, fps, audio, sourceId, bounds, allBounds }) {
+  async startScreenShare({ width, height, fps, audio, sourceId, direct, bounds, allBounds }) {
     if (this.screenStream) return;
 
     try {
-      if (bounds && allBounds) {
+      if (direct && sourceId) {
+        // Direct capture of a specific screen/window via desktopCapturer source id
+        const video = { mandatory: {
+          chromeMediaSource:   'desktop',
+          chromeMediaSourceId: sourceId,
+          maxWidth: width, maxHeight: height, maxFrameRate: fps,
+        } };
+        const audioOpt = audio
+          ? { mandatory: { chromeMediaSource: 'desktop' } }   // system loopback
+          : false;
+        try {
+          this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: audioOpt });
+        } catch {
+          // Some Windows setups reject combined audio+video — retry video only
+          this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        }
+      } else if (bounds && allBounds) {
+        // Fallback: full desktop capture cropped to the chosen monitor via canvas
         this.screenStream = await this._captureDisplayRegion({ width, height, fps, bounds, allBounds });
       } else {
+        // Fallback: entire desktop
         this.screenStream = await navigator.mediaDevices.getUserMedia({
           video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: width, maxHeight: height, maxFrameRate: fps } },
           audio: false,
@@ -353,17 +376,18 @@ class VoiceEngine {
       return;
     }
 
-    const track = this.screenStream.getVideoTracks()[0];
-    if (!track) { this.screenStream.getTracks().forEach(t => t.stop()); this.screenStream = null; return; }
+    const vTrack = this.screenStream.getVideoTracks()[0];
+    if (!vTrack) { this.screenStream.getTracks().forEach(t => t.stop()); this.screenStream = null; return; }
+    const shareTracks = [vTrack, ...this.screenStream.getAudioTracks()];
 
     // Add to all existing peers — onnegotiationneeded fires automatically
     for (const [sid, peer] of this.peers) {
-      const sender = peer.pc.addTrack(track, this.screenStream);
-      this._screenSenders.set(sid, sender);
+      const senders = shareTracks.map(t => peer.pc.addTrack(t, this.screenStream));
+      this._screenSenders.set(sid, senders);
     }
 
     if (this.roomId) this.socket.emit('screen:start', { roomId: this.roomId });
-    track.addEventListener('ended', () => this.stopScreenShare());
+    vTrack.addEventListener('ended', () => this.stopScreenShare());
     if (this.onScreenShare) this.onScreenShare(true, this.screenStream);
   }
 
@@ -372,9 +396,11 @@ class VoiceEngine {
     this.screenStream.getTracks().forEach(t => t.stop());
     this.screenStream = null;
 
-    for (const [sid, sender] of this._screenSenders) {
+    for (const [sid, senders] of this._screenSenders) {
       const peer = this.peers.get(sid);
-      if (peer) try { peer.pc.removeTrack(sender); } catch {}
+      if (peer) (Array.isArray(senders) ? senders : [senders]).forEach(s => {
+        try { peer.pc.removeTrack(s); } catch {}
+      });
     }
     this._screenSenders.clear();
 

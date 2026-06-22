@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dragStart: (sx, sy) => ipcRenderer.send('win:drag-start', sx, sy),
   dragMove:  (sx, sy) => ipcRenderer.send('win:drag-move',  sx, sy),
   dragEnd:   ()       => ipcRenderer.send('win:drag-end'),
-  getDisplays:   ()   => ipcRenderer.invoke('screen:displays'),
+  getScreenSources: () => ipcRenderer.invoke('screen:sources'),
   onUpdateReady: (cb) => ipcRenderer.on('update:ready', (_e, version) => cb(version)),
   installUpdate: () => ipcRenderer.send('update:install'),
   checkUpdate:   () => ipcRenderer.invoke('update:check'),
