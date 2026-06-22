@@ -8,6 +8,7 @@ class VoiceEngine {
     this.localStream      = null;   // processed mic stream → WebRTC
     this.localVideoStream = null;   // camera stream
     this.screenStream     = null;   // screen share stream
+    this._screenCleanup   = null;   // canvas-crop teardown (track.stop won't fire 'ended')
     this.cameraEnabled    = false;
     this.peers            = new Map();  // socketId → { pc, userId }
     this.audioEls         = new Map();  // socketId → HTMLAudioElement
@@ -239,9 +240,13 @@ class VoiceEngine {
         e.track.addEventListener('ended', () => {
           try { peer.recvAudio.removeTrack(e.track); } catch {}
         });
-        this._watchVolume(new MediaStream([e.track]), (v) => {
-          if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
-        });
+        // Only the first (mic) track drives the speaking indicator — not screen system audio
+        if (!peer.micWatched) {
+          peer.micWatched = true;
+          this._watchVolume(new MediaStream([e.track]), (v) => {
+            if (this.onSpeaking) this.onSpeaking(userId, v > this.noiseThreshold);
+          });
+        }
       } else if (e.track.kind === 'video') {
         const stream = e.streams[0] || new MediaStream([e.track]);
         if (this.onRemoteScreen) this.onRemoteScreen(userId, stream);
@@ -278,6 +283,9 @@ class VoiceEngine {
     // Add local tracks LAST so handlers (incl. onnegotiationneeded) are wired first
     if (this.localStream)
       this.localStream.getTracks().forEach(t => pc.addTrack(t, this.localStream));
+    else
+      // No mic (denied/absent): still negotiate so we can hear others & receive screen share
+      pc.addTransceiver('audio', { direction: 'recvonly' });
     if (this.localVideoStream)
       this.localVideoStream.getTracks().forEach(t => pc.addTrack(t, this.localVideoStream));
     if (this.screenStream) {
@@ -377,7 +385,13 @@ class VoiceEngine {
     }
 
     const vTrack = this.screenStream.getVideoTracks()[0];
-    if (!vTrack) { this.screenStream.getTracks().forEach(t => t.stop()); this.screenStream = null; return; }
+    if (!vTrack) {
+      this.screenStream.getTracks().forEach(t => t.stop());
+      if (this._screenCleanup) { this._screenCleanup(); this._screenCleanup = null; }
+      this.screenStream = null;
+      if (this.onScreenShareError) this.onScreenShareError('Не удалось получить видеопоток экрана');
+      return;
+    }
     const shareTracks = [vTrack, ...this.screenStream.getAudioTracks()];
 
     // Add to all existing peers — onnegotiationneeded fires automatically
@@ -394,6 +408,7 @@ class VoiceEngine {
   stopScreenShare() {
     if (!this.screenStream) return;
     this.screenStream.getTracks().forEach(t => t.stop());
+    if (this._screenCleanup) { this._screenCleanup(); this._screenCleanup = null; }
     this.screenStream = null;
 
     for (const [sid, senders] of this._screenSenders) {
@@ -443,11 +458,12 @@ class VoiceEngine {
     draw();
 
     const cropped = canvas.captureStream(fps);
-    cropped.getVideoTracks()[0]?.addEventListener('ended', () => {
+    // track.stop() does NOT fire 'ended', so stopScreenShare() must call this explicitly
+    this._screenCleanup = () => {
       cancelAnimationFrame(raf);
       fullStream.getTracks().forEach(t => t.stop());
       video.srcObject = null;
-    });
+    };
     return cropped;
   }
 
