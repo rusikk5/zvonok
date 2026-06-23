@@ -31,11 +31,15 @@ class VoiceEngine {
     this.onRemoteScreen     = null;  // (userId, stream | null)
     this.onScreenShareError = null;  // (message) => void
 
-    this.noiseSuppression = localStorage.getItem('zvonok_noise')    !== 'false';
+    // Noise suppression mode: 'off' | 'standard' | 'ghoul'
+    this.noiseMode        = localStorage.getItem('zvonok_noise_mode')
+                            || (localStorage.getItem('zvonok_noise') === 'false' ? 'off' : 'standard');
     this.noiseThreshold   = parseInt(localStorage.getItem('zvonok_threshold') || '12', 10);
     this.autoGate         = localStorage.getItem('zvonok_autogate') !== 'false';
     this._noiseFloor      = 8;
   }
+
+  get noiseSuppression() { return this.noiseMode !== 'off'; }
 
   init(socket, userId) {
     this.socket   = socket;
@@ -109,7 +113,7 @@ class VoiceEngine {
         audio: {
           echoCancellation: true,
           autoGainControl:  true,
-          noiseSuppression: true,        // reliable browser baseline NS (RNNoise layers on top)
+          noiseSuppression: this.noiseMode !== 'off',  // browser baseline NS (RNNoise layers on top)
           channelCount:     1,           // mono — RNNoise is mono, halves bandwidth
           sampleRate:       48000,       // ask device for 48k (RNNoise requires it)
           ...(this.micId ? { deviceId: { exact: this.micId } } : {}),
@@ -142,7 +146,7 @@ class VoiceEngine {
       wn.port.onmessage = ({ data }) => {
         if (data.type === 'error') console.warn('[RNNoise]', data.msg);
       };
-      wn.port.postMessage({ type: 'enabled', value: this.noiseSuppression });
+      wn.port.postMessage({ type: 'mode', value: this.noiseMode });
       fetch('/rnnoise.wasm')
         .then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
         .then(buf => wn.port.postMessage({ type: 'wasm', buffer: buf }, [buf]))
@@ -469,18 +473,21 @@ class VoiceEngine {
     return cropped;
   }
 
-  async setNoiseSuppression(enabled) {
-    this.noiseSuppression = enabled;
-    localStorage.setItem('zvonok_noise', enabled);
-    // Toggle the RNNoise layer live
-    if (this._workletNode) this._workletNode.port.postMessage({ type: 'enabled', value: enabled });
-    // Also toggle the browser's built-in NS on the raw mic track (no mic restart needed)
+  async setNoiseMode(mode) {
+    this.noiseMode = mode;   // 'off' | 'standard' | 'ghoul'
+    localStorage.setItem('zvonok_noise_mode', mode);
+    // Switch the RNNoise/ghoul layer live
+    if (this._workletNode) this._workletNode.port.postMessage({ type: 'mode', value: mode });
+    // Toggle the browser's built-in NS on the raw mic track (no mic restart needed)
     const micTrack = this._rawMicStream?.getAudioTracks()[0];
     if (micTrack?.applyConstraints) {
-      try { await micTrack.applyConstraints({ echoCancellation: true, autoGainControl: true, noiseSuppression: enabled }); } catch {}
+      try { await micTrack.applyConstraints({ echoCancellation: true, autoGainControl: true, noiseSuppression: mode !== 'off' }); } catch {}
     }
     if (!this._workletNode && this.roomId) await this._restartMic();
   }
+
+  // Back-compat for older callers
+  async setNoiseSuppression(enabled) { await this.setNoiseMode(enabled ? 'standard' : 'off'); }
 
   setSensitivity(threshold) {
     this.noiseThreshold = threshold;

@@ -1136,6 +1136,28 @@ async function openScreenPicker() {
   grid.querySelector('.sp-item')?.click();
 }
 
+// ── Noise-suppression mode selector ───────────────────────────
+const NS_DESC = {
+  off:      'Без обработки — слышен весь фоновый шум.',
+  standard: 'Убирает постоянный шум (вентилятор, гул, фон). Голос максимально естественный.',
+  ghoul:    'Максимальное подавление: глушит клавиатуру, мышь и резкие звуки. Слышен только голос.',
+};
+
+function bindNoiseModes(containerId, descId) {
+  const cont = $(containerId);
+  if (!cont || !S.voice) return;
+  const desc = descId ? $(descId) : null;
+  const paint = () => {
+    cont.querySelectorAll('.ns-mode').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === S.voice.noiseMode));
+    if (desc) desc.textContent = NS_DESC[S.voice.noiseMode] || '';
+  };
+  cont.querySelectorAll('.ns-mode').forEach(btn => {
+    btn.onclick = async () => { await S.voice.setNoiseMode(btn.dataset.mode); paint(); };
+  });
+  paint();
+}
+
 async function openSettings() {
   $('set-name').value     = S.me.name     || '';
   $('set-username').value = S.me.username || '';
@@ -1164,15 +1186,14 @@ async function openSettings() {
   updateColorPreview();
 
   // Voice processing settings
-  const sNoise = $('set-noise-chk'), sAuto = $('set-auto-chk');
+  const sAuto = $('set-auto-chk');
   const sSens  = $('set-sens'),      sSensVal = $('set-sens-val'), sManual = $('set-manual-row');
-  sNoise.checked       = S.voice.noiseSuppression;
+  bindNoiseModes('set-ns-modes', 'set-ns-desc');
   sAuto.checked        = S.voice.autoGate;
   sSens.value          = S.voice.noiseThreshold;
   sSensVal.textContent = S.voice.noiseThreshold;
   sManual.classList.toggle('hidden', S.voice.autoGate);
 
-  sNoise.onchange = async (e) => { await S.voice.setNoiseSuppression(e.target.checked); };
   sAuto.onchange  = (e) => {
     S.voice.setAutoGate(e.target.checked);
     sManual.classList.toggle('hidden', e.target.checked);
@@ -1415,17 +1436,15 @@ function setupUI() {
   });
   $('dmc-btn-settings').addEventListener('click', (e) => {
     e.stopPropagation();
-    $('dmc-audio-panel').classList.toggle('hidden');
+    const panel = $('dmc-audio-panel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) bindNoiseModes('dmc-ns-modes', null);
   });
   // Init audio settings from saved values
-  const _savedNoise = localStorage.getItem('zvonok_noise') !== 'false';
   const _savedThres = parseInt(localStorage.getItem('zvonok_threshold') || '10', 10);
-  $('dmc-noise-chk').checked = _savedNoise;
+  bindNoiseModes('dmc-ns-modes', null);
   $('dmc-sens').value = _savedThres;
   $('dmc-sens-val').textContent = _savedThres;
-  $('dmc-noise-chk').addEventListener('change', async (e) => {
-    await S.voice.setNoiseSuppression(e.target.checked);
-  });
   $('dmc-sens').addEventListener('input', (e) => {
     const v = parseInt(e.target.value, 10);
     $('dmc-sens-val').textContent = v;

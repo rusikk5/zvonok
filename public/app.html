@@ -330,9 +330,13 @@
       </button>
     </div>
     <div class="dmc-audio-panel hidden" id="dmc-audio-panel">
-      <div class="dmc-ap-row">
+      <div class="dmc-ap-row" style="flex-direction:column;align-items:stretch;gap:6px">
         <span>Шумоподавление</span>
-        <label class="tog"><input type="checkbox" id="dmc-noise-chk" checked><span class="tog-slider"></span></label>
+        <div class="ns-modes" id="dmc-ns-modes">
+          <button class="ns-mode" data-mode="off">Выкл</button>
+          <button class="ns-mode" data-mode="standard">Стандарт</button>
+          <button class="ns-mode" data-mode="ghoul">Гуль</button>
+        </div>
       </div>
       <div class="dmc-ap-row">
         <span>Чувствительность: <b id="dmc-sens-val">10</b></span>
@@ -480,11 +484,13 @@
         <div class="set-hint" style="margin-top:14px">Динамики</div>
         <select id="sel-speaker" class="dev-select"></select>
 
-        <div class="set-hint" style="margin-top:18px">Обработка голоса</div>
-        <div class="set-toggle-row">
-          <span style="font-size:.85rem;font-weight:500">Шумоподавление</span>
-          <label class="tog"><input type="checkbox" id="set-noise-chk"><span class="tog-slider"></span></label>
+        <div class="set-hint" style="margin-top:18px">Шумоподавление</div>
+        <div class="ns-modes" id="set-ns-modes">
+          <button class="ns-mode" data-mode="off">Выкл</button>
+          <button class="ns-mode" data-mode="standard">Стандартное</button>
+          <button class="ns-mode" data-mode="ghoul">Гуль</button>
         </div>
+        <div class="ns-mode-desc" id="set-ns-desc"></div>
         <div class="set-toggle-row" style="margin-top:10px">
           <span style="font-size:.85rem;font-weight:500">Авто-чувствительность</span>
           <label class="tog"><input type="checkbox" id="set-auto-chk"><span class="tog-slider"></span></label>
