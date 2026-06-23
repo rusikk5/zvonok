@@ -109,7 +109,9 @@ class VoiceEngine {
         audio: {
           echoCancellation: true,
           autoGainControl:  true,
-          noiseSuppression: false,
+          noiseSuppression: true,        // reliable browser baseline NS (RNNoise layers on top)
+          channelCount:     1,           // mono — RNNoise is mono, halves bandwidth
+          sampleRate:       48000,       // ask device for 48k (RNNoise requires it)
           ...(this.micId ? { deviceId: { exact: this.micId } } : {}),
         },
         video: false,
@@ -123,7 +125,9 @@ class VoiceEngine {
     if (this._rawMicStream) this._rawMicStream.getTracks().forEach(t => t.stop());
     this._rawMicStream = rawStream;
 
-    const ctx      = new AudioContext();
+    // CRITICAL: pin context to 48 kHz — RNNoise's 480-sample frame == 10 ms only at 48 kHz.
+    // Without this the context runs at the system rate (often 44.1 kHz) and RNNoise distorts.
+    const ctx      = new AudioContext({ sampleRate: 48000 });
     this._micCtx   = ctx;
     const src      = ctx.createMediaStreamSource(rawStream);
     const analyser = ctx.createAnalyser();
@@ -144,14 +148,12 @@ class VoiceEngine {
         .then(buf => wn.port.postMessage({ type: 'wasm', buffer: buf }, [buf]))
         .catch(e => console.warn('[RNNoise] fetch:', e));
     } catch {
+      // RNNoise worklet unavailable — browser NS already cleans; add a gentle low-rumble highpass
       this._workletNode = null;
       if (this.noiseSuppression) {
         const hpf = ctx.createBiquadFilter();
-        hpf.type = 'highpass'; hpf.frequency.value = 80; hpf.Q.value = 0.7;
-        const comp = ctx.createDynamicsCompressor();
-        comp.threshold.value = -28; comp.knee.value = 8; comp.ratio.value = 8;
-        comp.attack.value = 0.002; comp.release.value = 0.15;
-        src.connect(analyser); analyser.connect(hpf); hpf.connect(comp); comp.connect(dest);
+        hpf.type = 'highpass'; hpf.frequency.value = 90; hpf.Q.value = 0.5;
+        src.connect(hpf); hpf.connect(analyser); analyser.connect(dest);
       } else {
         src.connect(analyser); analyser.connect(dest);
       }
@@ -470,11 +472,14 @@ class VoiceEngine {
   async setNoiseSuppression(enabled) {
     this.noiseSuppression = enabled;
     localStorage.setItem('zvonok_noise', enabled);
-    if (this._workletNode) {
-      this._workletNode.port.postMessage({ type: 'enabled', value: enabled });
-    } else if (this.roomId) {
-      await this._restartMic();
+    // Toggle the RNNoise layer live
+    if (this._workletNode) this._workletNode.port.postMessage({ type: 'enabled', value: enabled });
+    // Also toggle the browser's built-in NS on the raw mic track (no mic restart needed)
+    const micTrack = this._rawMicStream?.getAudioTracks()[0];
+    if (micTrack?.applyConstraints) {
+      try { await micTrack.applyConstraints({ echoCancellation: true, autoGainControl: true, noiseSuppression: enabled }); } catch {}
     }
+    if (!this._workletNode && this.roomId) await this._restartMic();
   }
 
   setSensitivity(threshold) {
