@@ -825,8 +825,9 @@ input[type=range]{accent-color:#2fb774;cursor:pointer}
   .m-menu-btn{display:flex;align-items:center;justify-content:center;
     position:fixed;top:0;left:0;width:46px;height:52px;color:#eafff5;z-index:401}
 
-  /* Chat is ALWAYS full-screen; nav slides over it */
-  .app{display:block;padding:0;position:relative}
+  /* Chat is ALWAYS full-screen; nav slides over it.
+     z-index:auto is CRITICAL — otherwise .app traps the drawers below the backdrop. */
+  .app{display:block;padding:0;position:static;z-index:auto}
   .chat{
     position:fixed;left:0;right:0;top:0;bottom:0;
     border-radius:0;border:none;box-shadow:none;z-index:1;

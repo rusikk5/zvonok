@@ -1,6 +1,6 @@
 'use strict';
 // Minimal PWA service worker — enables install + offline shell, never touches live data.
-const CACHE = 'zvonok-v3';
+const CACHE = 'zvonok-v4';
 const SHELL = ['/app.html', '/index.html', '/css/app.css', '/js/main.js', '/js/voice.js', '/js/auth.js', '/icon.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
