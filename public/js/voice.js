@@ -432,25 +432,42 @@ class VoiceEngine {
   }
 
   // ── Screen share ──────────────────────────────────────────
-  async startScreenShare({ width, height, fps, audio, sourceId, direct, bounds, allBounds }) {
+  async startScreenShare({ width, height, fps, audio, sourceId, direct, bounds, allBounds, showCursor = true }) {
     if (this.screenStream) return;
 
     try {
       if (direct && sourceId) {
-        // Direct capture of a specific screen/window via desktopCapturer source id
-        const video = { mandatory: {
-          chromeMediaSource:   'desktop',
-          chromeMediaSourceId: sourceId,
-          maxWidth: width, maxHeight: height, maxFrameRate: fps,
-        } };
-        const audioOpt = audio
-          ? { mandatory: { chromeMediaSource: 'desktop' } }   // system loopback
-          : false;
-        try {
-          this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: audioOpt });
-        } catch {
-          // Some Windows setups reject combined audio+video — retry video only
-          this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        // Preferred: getDisplayMedia so we can control the cursor (hide the OS cursor that
+        // games like CS park in the centre of the screen). Main process hands back our source.
+        let got = false;
+        if (window.electronAPI?.selectScreen && navigator.mediaDevices.getDisplayMedia) {
+          try {
+            await window.electronAPI.selectScreen(sourceId);
+            this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                frameRate: { ideal: fps },
+                width:  { ideal: width },
+                height: { ideal: height },
+                cursor: showCursor ? 'motion' : 'never',
+              },
+              audio: !!audio,
+            });
+            got = true;
+          } catch { got = false; }
+        }
+        if (!got) {
+          // Fallback: legacy getUserMedia (cursor always visible, but reliable)
+          const video = { mandatory: {
+            chromeMediaSource:   'desktop',
+            chromeMediaSourceId: sourceId,
+            maxWidth: width, maxHeight: height, maxFrameRate: fps,
+          } };
+          const audioOpt = audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false;
+          try {
+            this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: audioOpt });
+          } catch {
+            this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+          }
         }
       } else if (bounds && allBounds) {
         // Fallback: full desktop capture cropped to the chosen monitor via canvas

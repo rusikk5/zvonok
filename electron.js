@@ -114,12 +114,26 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; prevBounds = null; dragState = null; });
 
-  mainWindow.webContents.session.setDisplayMediaRequestHandler(
-    (_req, callback) => { callback({ video: null }); },
-  );
+  // getDisplayMedia → hand back the source the renderer pre-selected (lets us pass a
+  // `cursor` constraint so the OS cursor can be hidden — getUserMedia can't do that)
+  mainWindow.webContents.session.setDisplayMediaRequestHandler(async (_req, callback) => {
+    if (!_pendingScreenId) { callback({ video: null }); return; }
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
+      const src = sources.find(s => s.id === _pendingScreenId);
+      _pendingScreenId = null;
+      callback(src ? { video: src } : { video: null });
+    } catch {
+      _pendingScreenId = null;
+      callback({ video: null });
+    }
+  });
 }
 
 // ── Screen sources IPC ───────────────────────────────────────
+// Renderer tells us which source to hand to the next getDisplayMedia call
+ipcMain.handle('screen:select', (_e, id) => { _pendingScreenId = id; });
+
 ipcMain.handle('screen:sources', async () => {
   // Preferred: real desktopCapturer sources (direct capture via chromeMediaSourceId, with thumbnails)
   try {
