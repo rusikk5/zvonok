@@ -241,11 +241,8 @@ async function init() {
   setupUI();
   await Promise.all([loadRooms(), loadFriends()]);
   if (S.rooms.length > 0) selectRoom(S.rooms[0].id);
-  // On phones, reveal the channels drawer on first load so navigation is obvious
-  if (window.matchMedia('(max-width:760px)').matches) {
-    document.querySelector('.sidebar')?.classList.add('m-open');
-    $('m-backdrop')?.classList.add('show');
-  }
+  // On phones, reveal the nav drawer on first load so navigation is obvious
+  if (window.matchMedia('(max-width:760px)').matches) window.openNavDrawer?.();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -506,10 +503,7 @@ function renderRoomIcons() {
     btn.addEventListener('click', () => {
       selectRoom(btn.dataset.rid);
       // Phone: reveal that server's channels right away
-      if (window.matchMedia('(max-width:760px)').matches) {
-        document.querySelector('.sidebar')?.classList.add('m-open');
-        $('m-backdrop')?.classList.add('show');
-      }
+      if (window.matchMedia('(max-width:760px)').matches) window.openNavDrawer?.();
     });
   });
 }
@@ -1369,25 +1363,27 @@ function hideModal(id) { $(id).classList.add('hidden'); }
 // UI event wiring
 // ═══════════════════════════════════════════════════════════════
 function setupUI() {
-  // ── Mobile drawers (channels / members) ──
-  const _sidebar = document.querySelector('.sidebar');
-  const _members = $('members-panel');
+  // ── Mobile drawers (nav = servers+channels / members) ──
+  const _app      = document.querySelector('.app');
+  const _sidebar  = document.querySelector('.sidebar');
   const _backdrop = $('m-backdrop');
-  const isMobile = () => window.matchMedia('(max-width:760px)').matches;
+  const isMobile  = () => window.matchMedia('(max-width:760px)').matches;
   window.closeDrawers = () => {
-    _sidebar?.classList.remove('m-open');
-    _members?.classList.remove('m-open');
+    _app?.classList.remove('m-nav', 'm-members');
     _backdrop?.classList.remove('show');
   };
-  const _openDrawer = (which) => {
-    window.closeDrawers();
-    (which === 'members' ? _members : _sidebar)?.classList.add('m-open');
+  window.openNavDrawer = () => {
+    _app?.classList.add('m-nav'); _app?.classList.remove('m-members');
+    _backdrop?.classList.add('show');
+  };
+  window.openMembersDrawer = () => {
+    _app?.classList.add('m-members'); _app?.classList.remove('m-nav');
     _backdrop?.classList.add('show');
   };
   $('btn-m-menu')?.addEventListener('click', () =>
-    _sidebar?.classList.contains('m-open') ? window.closeDrawers() : _openDrawer('channels'));
+    _app?.classList.contains('m-nav') ? window.closeDrawers() : window.openNavDrawer());
   _backdrop?.addEventListener('click', window.closeDrawers);
-  // Tapping a text channel closes the drawer so the chat is visible
+  // Tapping a text channel closes the nav so the chat is visible
   _sidebar?.addEventListener('click', (e) => {
     if (isMobile() && e.target.closest('.tch-row')) window.closeDrawers();
   });
@@ -1959,11 +1955,8 @@ function setupUI() {
   // Text channel actions
   $('btn-toggle-members-ch').addEventListener('click', () => {
     if (window.matchMedia('(max-width:760px)').matches) {
-      // Mobile: slide the members panel in as a drawer
-      const m = $('members-panel');
-      const open = m.classList.contains('m-open');
-      window.closeDrawers?.();
-      if (!open) { m.classList.add('m-open'); $('m-backdrop')?.classList.add('show'); }
+      const app = document.querySelector('.app');
+      app?.classList.contains('m-members') ? window.closeDrawers?.() : window.openMembersDrawer?.();
       return;
     }
     S.showMembers = !S.showMembers;

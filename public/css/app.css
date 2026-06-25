@@ -810,53 +810,61 @@ input[type=range]{accent-color:#2fb774;cursor:pointer}
 .sidebar .stretch::-webkit-scrollbar-thumb{background:#1a1b1e;border-radius:4px}
 .sidebar .stretch::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.08)}
 
-/* ─── Адаптив ─────────────────────────────────────────────────────────────── */
-@media(max-width:1100px){.members{display:none}.app{grid-template-columns:54px 230px 1fr}}
+/* ─── Адаптив (планшеты) ──────────────────────────────────────────────────── */
+@media(max-width:1100px) and (min-width:761px){.members{display:none}.app{grid-template-columns:54px 230px 1fr}}
 
 /* Hamburger + drawer backdrop (mobile only) */
-.m-menu-btn{display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);
-  background:none;border:none;color:#eafff5;cursor:pointer;padding:6px;border-radius:8px;z-index:7}
-.m-backdrop{display:none;position:fixed;inset:0;z-index:390;background:rgba(0,0,0,.45);
-  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.m-menu-btn{display:none;background:none;border:none;color:#eafff5;cursor:pointer}
+.m-backdrop{display:none;position:fixed;inset:0;z-index:390;background:rgba(0,0,0,.5)}
 .m-backdrop.show{display:block}
 
-/* ─── Телефон ─────────────────────────────────────────────────────────────── */
+/* ════ ТЕЛЕФОН ════════════════════════════════════════════════════════════════ */
 @media(max-width:760px){
   *{-webkit-tap-highlight-color:transparent}
-  .chat-scroll,.sidebar,.members{overscroll-behavior:contain}
-  .titlebar{height:46px}
-  .traffic{display:none}                 /* no window controls on mobile */
-  .m-menu-btn{display:flex;align-items:center;justify-content:center}
+  .titlebar{display:none}                       /* one header (the chat header) is enough */
+  .m-menu-btn{display:flex;align-items:center;justify-content:center;
+    position:fixed;top:0;left:0;width:46px;height:52px;color:#eafff5;z-index:401}
 
-  .app{grid-template-columns:50px 1fr;gap:0;padding:0}
-  .rail{padding:8px 0}                     /* keep the thin server strip for switching servers */
+  /* Chat is ALWAYS full-screen; nav slides over it */
+  .app{display:block;padding:0;position:relative}
+  .chat{
+    position:fixed;left:0;right:0;top:0;bottom:0;
+    border-radius:0;border:none;box-shadow:none;z-index:1;
+  }
+  .chat-hdr{padding:14px 12px 14px 50px;min-height:52px}   /* room for the ☰ button */
+  .chat-scroll{padding:12px;overscroll-behavior:contain}
+  .composer{margin:8px 10px 10px}
+  .empty-state{padding:24px 16px}
 
-  /* Channels = slide-in drawer from the left (next to the server strip) */
+  /* Left nav drawer = server strip + channels, slide together */
+  .rail,.sidebar{
+    position:fixed;top:0;bottom:0;z-index:400;
+    transform:translateX(-110%);transition:transform .22s ease;
+    overscroll-behavior:contain;
+  }
+  .rail{left:0;width:60px;padding:56px 0 10px;gap:10px;background:rgba(8,26,22,0.6)}
   .sidebar{
-    display:flex;position:fixed;top:46px;left:50px;bottom:0;
-    width:min(82vw,300px);z-index:400;padding:8px;gap:8px;
-    transform:translateX(-115%);transition:transform .25s ease;
-    overflow-y:auto;
+    left:60px;width:calc(100vw - 60px - 38px);max-width:300px;
+    padding:10px;gap:10px;overflow-y:auto;
   }
-  .sidebar.m-open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.5)}
+  .app.m-nav .rail,.app.m-nav .sidebar{transform:none}
+  .app.m-nav .sidebar{box-shadow:0 0 50px rgba(0,0,0,.55)}
 
-  /* Chat fills the screen, square edges */
-  .chat{border-radius:0}
-  .chat-hdr{padding-left:14px}
-
-  /* Members = slide-in drawer from the right (toggled by the people button) */
+  /* Right members drawer */
   .members{
-    display:flex;flex-direction:column;position:fixed;top:46px;right:0;bottom:0;
+    display:flex;flex-direction:column;position:fixed;top:0;right:0;bottom:0;
     width:min(82vw,300px);z-index:400;border-radius:0;
-    transform:translateX(110%);transition:transform .25s ease;
+    transform:translateX(110%);transition:transform .22s ease;
   }
-  .members.m-open{display:flex;transform:none;box-shadow:0 0 40px rgba(0,0,0,.5)}
+  .app.m-members .members{display:flex;transform:none;box-shadow:0 0 50px rgba(0,0,0,.55)}
 
   /* Bigger touch targets */
-  .tch-row,.vch-row{padding:9px 10px}
-  .vbtn{height:42px}
-  .composer{margin:0 10px 10px}
-  .screen-ov{width:92vw;right:4vw;bottom:12px}
+  .tch-row,.vch-row,.vuser,.member{padding:11px 10px}
+  .vbtn{height:46px}
+  .server{width:44px;height:44px}
+  .server canvas{width:32px;height:32px}
+  .screen-ov{width:94vw;left:3vw;right:auto;bottom:12px}
+  .modal{width:calc(100vw - 24px)}
 }
 
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
