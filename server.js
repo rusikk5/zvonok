@@ -84,8 +84,6 @@ if (IS_PROD) {
   }).listen(3001, '0.0.0.0');
 }
 
-const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 // ── DB Schema ──────────────────────────────────────────────────────
 const INIT_SQL = `
@@ -144,6 +142,12 @@ const INIT_SQL = `
     blocked_id TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     PRIMARY KEY (blocker_id, blocked_id)
+  );
+  CREATE TABLE IF NOT EXISTS avatars (
+    user_id TEXT PRIMARY KEY,
+    mime    TEXT NOT NULL,
+    data    TEXT NOT NULL,
+    v       INTEGER NOT NULL
   );
 `;
 
@@ -227,11 +231,9 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Avatar upload ──────────────────────────────────────────────────
+// Avatars are kept in the (persistent) DB, not on Railway's ephemeral disk
 const upload = multer({
-  storage: multer.diskStorage({
-    destination: './public/uploads/',
-    filename: (req, file, cb) => cb(null, req.user.id + path.extname(file.originalname).toLowerCase()),
-  }),
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_, f, cb) => cb(null, f.mimetype.startsWith('image/')),
 });
@@ -356,11 +358,30 @@ app.patch('/api/me', auth, async (req, res) => {
 app.post('/api/me/avatar', auth, upload.single('avatar'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Нет файла' });
-    const avatar = '/uploads/' + req.file.filename;
+    const v    = Date.now();
+    const mime = req.file.mimetype || 'image/png';
+    const b64  = req.file.buffer.toString('base64');
+    await db.run(
+      `INSERT INTO avatars (user_id, mime, data, v) VALUES (?,?,?,?)
+       ON CONFLICT(user_id) DO UPDATE SET mime=excluded.mime, data=excluded.data, v=excluded.v`,
+      [req.user.id, mime, b64, v]
+    );
+    const avatar = '/api/avatar/' + req.user.id + '?v=' + v;   // version busts the cache
     await db.run('UPDATE users SET avatar=? WHERE id=?', [avatar, req.user.id]);
     io.emit('user:update', { id: req.user.id, avatar });
     res.json({ avatar });
   } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
+});
+
+// Serve avatar image bytes from the DB (public — used directly in <img src>)
+app.get('/api/avatar/:id', async (req, res) => {
+  try {
+    const row = await db.get('SELECT mime, data FROM avatars WHERE user_id=?', [req.params.id]);
+    if (!row) return res.status(404).end();
+    res.set('Content-Type', row.mime);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(Buffer.from(row.data, 'base64'));
+  } catch { res.status(500).end(); }
 });
 
 // ── Users (search + profile) ───────────────────────────────────────

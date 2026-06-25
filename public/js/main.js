@@ -1651,7 +1651,7 @@ function setupUI() {
         const res  = await fetch('/api/me/avatar', { method: 'POST', headers: { 'Authorization': `Bearer ${S.token}` }, body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        S.me.avatar = data.avatar + '?v=' + Date.now();
+        S.me.avatar = data.avatar;   // already carries ?v=<ts> for cache-busting
         $('profile-ava-preview').innerHTML = avatarHTML(S.me, 80);
         renderUserBar();
         toast('Аватарка обновлена!', 'success');
