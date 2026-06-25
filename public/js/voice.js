@@ -105,6 +105,16 @@ class VoiceEngine {
     this.socket.emit('voice:join', { roomId });
   }
 
+  // Socket reconnected: re-announce to the room and rebuild peers instead of dropping the call
+  async rejoin() {
+    if (!this.roomId) return;
+    // Old peer connections reference dead socket ids — tear them down
+    this.peers.forEach((_, sid) => this._cleanPeer(sid));
+    // Mic usually still alive; only re-acquire if it was lost
+    if (!this.localStream) await this._setupMic();
+    this.socket.emit('voice:join', { roomId: this.roomId });
+  }
+
   async _setupMic() {
     const gen = ++this._micRestartGen;
     let rawStream;
@@ -168,9 +178,13 @@ class VoiceEngine {
       if (ctx !== this._micCtx || ctx.state === 'closed') return;
       analyser.getByteFrequencyData(buf);
       const v = buf.reduce((a, b) => a + b, 0) / buf.length;
-      if (this.autoGate && v < this.noiseThreshold) {
-        this._noiseFloor    = this._noiseFloor * 0.97 + v * 0.03;
-        this.noiseThreshold = Math.max(5, Math.round(this._noiseFloor * 2.8));
+      if (this.autoGate) {
+        // Track ambient floor BOTH ways: follow quiet quickly, leak up slowly so a floor
+        // stuck below the noise level un-sticks within ~1-2s (fixes the "always speaking" ring),
+        // while the slow up-leak avoids cutting the indicator during long continuous speech.
+        const a = v < this._noiseFloor ? 0.25 : 0.0025;
+        this._noiseFloor   += (v - this._noiseFloor) * a;
+        this.noiseThreshold = Math.min(60, Math.max(8, Math.round(this._noiseFloor * 1.8 + 6)));
       }
       if (this.onSpeaking)   this.onSpeaking(this.myUserId, v > this.noiseThreshold && !this.muted);
       if (this.onInputLevel) this.onInputLevel(
@@ -377,13 +391,16 @@ class VoiceEngine {
         }
       } else if (bounds && allBounds) {
         // Fallback: full desktop capture cropped to the chosen monitor via canvas
-        this.screenStream = await this._captureDisplayRegion({ width, height, fps, bounds, allBounds });
+        this.screenStream = await this._captureDisplayRegion({ width, height, fps, bounds, allBounds, audio });
       } else {
-        // Fallback: entire desktop
-        this.screenStream = await navigator.mediaDevices.getUserMedia({
-          video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: width, maxHeight: height, maxFrameRate: fps } },
-          audio: false,
-        });
+        // Fallback: entire desktop (capture system audio in the SAME call — required on Windows)
+        const video = { mandatory: { chromeMediaSource: 'desktop', maxWidth: width, maxHeight: height, maxFrameRate: fps } };
+        const audioOpt = audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false;
+        try {
+          this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: audioOpt });
+        } catch {
+          this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+        }
       }
     } catch(e) {
       if (this.onScreenShareError) this.onScreenShareError(e.message || String(e));
@@ -429,11 +446,17 @@ class VoiceEngine {
     if (this.onScreenShare) this.onScreenShare(false, null);
   }
 
-  async _captureDisplayRegion({ width, height, fps, bounds, allBounds }) {
-    const fullStream = await navigator.mediaDevices.getUserMedia({
-      video: { mandatory: { chromeMediaSource: 'desktop', maxWidth: 3840, maxHeight: 2160, maxFrameRate: fps } },
-      audio: false,
-    });
+  async _captureDisplayRegion({ width, height, fps, bounds, allBounds, audio }) {
+    const video0 = { mandatory: { chromeMediaSource: 'desktop', maxWidth: 3840, maxHeight: 2160, maxFrameRate: fps } };
+    let fullStream;
+    try {
+      fullStream = await navigator.mediaDevices.getUserMedia({
+        video: video0,
+        audio: audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false,
+      });
+    } catch {
+      fullStream = await navigator.mediaDevices.getUserMedia({ video: video0, audio: false });
+    }
 
     const minX   = Math.min(...allBounds.map(b => b.x));
     const minY   = Math.min(...allBounds.map(b => b.y));
@@ -464,6 +487,8 @@ class VoiceEngine {
     draw();
 
     const cropped = canvas.captureStream(fps);
+    // Carry the captured system-audio track over to the outgoing (cropped) stream
+    fullStream.getAudioTracks().forEach(t => cropped.addTrack(t));
     // track.stop() does NOT fire 'ended', so stopScreenShare() must call this explicitly
     this._screenCleanup = () => {
       cancelAnimationFrame(raf);
@@ -491,14 +516,15 @@ class VoiceEngine {
 
   setSensitivity(threshold) {
     this.noiseThreshold = threshold;
-    this._noiseFloor    = threshold / 2.8;
+    this._noiseFloor    = Math.max(0, (threshold - 6) / 1.8);
     localStorage.setItem('zvonok_threshold', threshold);
   }
 
   setAutoGate(enabled) {
     this.autoGate = enabled;
     localStorage.setItem('zvonok_autogate', enabled);
-    if (enabled) this._noiseFloor = this.noiseThreshold / 2.8;
+    this._noiseFloor = Math.max(0, (this.noiseThreshold - 6) / 1.8);
+    if (this.onSpeaking) this.onSpeaking(this.myUserId, false);  // reset indicator on mode switch
   }
 
   async changeMic(deviceId) {

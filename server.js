@@ -35,9 +35,11 @@ const SECRET = fs.existsSync(SECRET_PATH)
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 let server, io;
+// Tolerate brief network hiccups so users aren't dropped from voice on a blip
+const IO_OPTS = { pingTimeout: 60000, pingInterval: 25000 };
 if (IS_PROD) {
   server = http.createServer(app);
-  io     = new Server(server, { cors: { origin: '*' } });
+  io     = new Server(server, { cors: { origin: '*' }, ...IO_OPTS });
 } else {
   const CERT_PATH = path.join(DATA_DIR, 'cert.json');
   let tlsCreds;
@@ -75,7 +77,7 @@ if (IS_PROD) {
     fs.writeFileSync(CERT_PATH, JSON.stringify(tlsCreds));
   }
   server = https.createServer(tlsCreds, app);
-  io     = new Server(server);
+  io     = new Server(server, IO_OPTS);
   http.createServer((req, res) => {
     res.writeHead(301, { Location: `https://${req.headers.host.replace(/:\d+$/, '')}:${PORT}${req.url}` });
     res.end();

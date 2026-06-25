@@ -212,10 +212,8 @@ function setupSocket() {
 
   S.socket.on('connect', () => {
     if (S.myStatus !== 'online') S.socket.emit('set:status', S.myStatus);
-    // Socket reconnected — server cleared our voice state, sync client
-    if (S.voice.roomId && !S.dmCallState) {
-      leaveVoice();
-    }
+    // Socket reconnected — server dropped us from the voice room; rejoin instead of leaving
+    if (S.voice.roomId) S.voice.rejoin();
   });
 
   S.socket.on('connect_error', (e) => {
