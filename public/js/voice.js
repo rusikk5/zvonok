@@ -432,13 +432,13 @@ class VoiceEngine {
   }
 
   // ── Screen share ──────────────────────────────────────────
-  async startScreenShare({ width, height, fps, audio, sourceId, direct, bounds, allBounds, showCursor = true }) {
+  async startScreenShare({ width, height, fps, audio, sourceId, direct, bounds, allBounds }) {
     if (this.screenStream) return;
 
     try {
       if (direct && sourceId) {
-        // Preferred: getDisplayMedia so we can control the cursor (hide the OS cursor that
-        // games like CS park in the centre of the screen). Main process hands back our source.
+        // Preferred: getDisplayMedia so we can hide the OS cursor that games like CS park
+        // in the centre of the screen. Main process hands back our pre-selected source.
         let got = false;
         if (window.electronAPI?.selectScreen && navigator.mediaDevices.getDisplayMedia) {
           try {
@@ -448,7 +448,7 @@ class VoiceEngine {
                 frameRate: { ideal: fps },
                 width:  { ideal: width },
                 height: { ideal: height },
-                cursor: showCursor ? 'motion' : 'never',
+                cursor: 'never',
               },
               audio: !!audio,
             });

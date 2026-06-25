@@ -1796,18 +1796,17 @@ function setupUI() {
 
   // Screen picker: share button
   $('btn-sp-share').addEventListener('click', async () => {
-    const quality    = parseInt($('sp-quality').value, 10);
-    const fps        = parseInt($('sp-fps').value, 10) || 30;
-    const audio      = $('sp-audio').checked;
-    const showCursor = $('sp-cursor').checked;
-    const res        = { 480: [854, 480], 720: [1280, 720], 1080: [1920, 1080] }[quality] || [1280, 720];
+    const quality = parseInt($('sp-quality').value, 10);
+    const fps     = parseInt($('sp-fps').value, 10) || 30;
+    const audio   = $('sp-audio').checked;
+    const res     = { 480: [854, 480], 720: [1280, 720], 1080: [1920, 1080] }[quality] || [1280, 720];
     const sel       = $('sp-grid').querySelector('.sp-item.selected');
     const sourceId  = sel?.dataset.sourceId;
     const direct    = sel?.dataset.direct === '1';
     const bounds    = sel?.dataset.bounds    ? JSON.parse(sel.dataset.bounds)    : null;
     const allBounds = sel?.dataset.allBounds ? JSON.parse(sel.dataset.allBounds) : null;
     hideModal('modal-screen');
-    await S.voice.startScreenShare({ width: res[0], height: res[1], fps, audio, sourceId, direct, bounds, allBounds, showCursor });
+    await S.voice.startScreenShare({ width: res[0], height: res[1], fps, audio, sourceId, direct, bounds, allBounds });
   });
 
   $('btn-self-stop').addEventListener('click', () => S.voice.stopScreenShare());
