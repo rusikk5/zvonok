@@ -114,8 +114,8 @@ body:not(.auth-body){background:#0b0e11}
 /* ─── Сетка ───────────────────────────────────────────────────────────────── */
 .app{
   flex:1;display:grid;
-  grid-template-columns:68px 230px 1fr 220px;
-  gap:12px;padding:0 12px 12px;min-height:0;
+  grid-template-columns:60px 192px 1fr 220px;
+  gap:10px;padding:0 10px 10px;min-height:0;
   position:relative;z-index:1;
 }
 
