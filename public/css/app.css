@@ -38,16 +38,17 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:transparent}
 body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
-body:not(.auth-body){background:#0b0e11}
+body:not(.auth-body){background:transparent}
 
 /* ─── Главное окно ────────────────────────────────────────────────────────── */
+/* Semi-transparent teal tint over the OS blur (acrylic / vibrancy) — desktop shows through */
 .window{
   position:relative;width:100vw;height:100vh;
   background:
-    radial-gradient(125% 85% at 18% -5%, rgba(150,224,196,0.55), transparent 58%),
-    radial-gradient(110% 95% at 105% 108%, rgba(120,196,150,0.50), transparent 55%),
-    radial-gradient(90% 70% at 85% 0%, rgba(180,224,200,0.35), transparent 60%),
-    linear-gradient(158deg, #3c8e78 0%, #469a7f 32%, #5fa97c 64%, #7cb56f 100%);
+    radial-gradient(125% 85% at 18% -5%, rgba(150,224,196,0.40), transparent 58%),
+    radial-gradient(110% 95% at 105% 108%, rgba(120,196,150,0.36), transparent 55%),
+    radial-gradient(90% 70% at 85% 0%, rgba(180,224,200,0.24), transparent 60%),
+    linear-gradient(158deg, rgba(40,120,98,0.58) 0%, rgba(60,140,108,0.54) 40%, rgba(95,160,105,0.50) 100%);
   display:flex;flex-direction:column;overflow:hidden;
   transition:transform .2s ease,opacity .2s ease;
 }

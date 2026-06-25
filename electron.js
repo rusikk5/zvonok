@@ -49,6 +49,7 @@ function setSplashProgress(p) {
 }
 
 function createWindow() {
+  const isMac = process.platform === 'darwin';
   mainWindow = new BrowserWindow({
     width: 480,
     height: 600,
@@ -56,7 +57,11 @@ function createWindow() {
     minHeight: 0,
     resizable: false,
     frame: false,
-    backgroundColor: '#0b0e11',
+    // Real translucency so the desktop blurs through (glassmorphism like the reference)
+    backgroundColor: '#00000000',
+    ...(isMac
+      ? { vibrancy: 'under-window', visualEffectState: 'active', transparent: true }
+      : { backgroundMaterial: 'acrylic' }),
     show: false,
     icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
