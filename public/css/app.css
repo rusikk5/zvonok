@@ -19,9 +19,18 @@
   --glass:      rgba(15, 45, 38, 0.55);
   --glass-soft: rgba(20, 50, 43, 0.40);
   --glass-hi:   rgba(255, 255, 255, 0.10);
-  --glass-brd:  rgba(255, 255, 255, 0.10);
+  --glass-brd:  rgba(255, 255, 255, 0.18);
   --glass-blur: 22px;
   --shadow:     0 10px 30px rgba(0, 25, 18, 0.28);
+
+  /* iOS-26-style "Liquid Glass": refraction + specular rim light + sheen */
+  --lg-backdrop: blur(22px) saturate(185%) brightness(1.06);
+  --lg-sheen:    linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 30%);
+  --lg-glow:
+    inset 0 1.4px 0.5px -0.5px rgba(255,255,255,0.55),
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    inset 0 -26px 50px -38px rgba(0,0,0,0.45),
+    0 14px 40px rgba(0, 28, 20, 0.30);
 
   --lg-fill:    rgba(255,255,255,0.06);
   --lg-edge:    rgba(255,255,255,0.10);
@@ -120,12 +129,12 @@ body:not(.auth-body){background:transparent}
 
 /* ─── Стеклянные панели ───────────────────────────────────────────────────── */
 .glass{
-  background:var(--glass);
-  backdrop-filter:blur(var(--glass-blur));
-  -webkit-backdrop-filter:blur(var(--glass-blur));
+  background:var(--lg-sheen), var(--glass);
+  backdrop-filter:var(--lg-backdrop);
+  -webkit-backdrop-filter:var(--lg-backdrop);
   border:1px solid var(--glass-brd);
   border-radius:var(--r-lg);
-  box-shadow:var(--shadow);
+  box-shadow:var(--lg-glow);
 }
 .round-btn{
   width:34px;height:30px;border-radius:6px;
@@ -168,10 +177,11 @@ body:not(.auth-body){background:transparent}
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   transition:border-radius .2s,background .15s,box-shadow .15s;
   overflow:visible;
-  background:var(--glass);
-  backdrop-filter:blur(var(--glass-blur));
-  -webkit-backdrop-filter:blur(var(--glass-blur));
+  background:var(--lg-sheen), var(--glass);
+  backdrop-filter:var(--lg-backdrop);
+  -webkit-backdrop-filter:var(--lg-backdrop);
   border:1px solid var(--glass-brd);
+  box-shadow:var(--lg-glow);
   position:relative;
 }
 .server::before{
@@ -341,14 +351,15 @@ body:not(.auth-body){background:transparent}
 .voice-conn .right{flex-shrink:0;display:flex;align-items:center;color:var(--ink-dim);cursor:pointer}
 .voice-btns{display:flex;gap:5px}
 .vbtn{
-  flex:1;height:32px;border-radius:6px;
-  border:none;
-  background:rgba(255,255,255,0.08);
+  flex:1;height:36px;border-radius:11px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:var(--lg-sheen), rgba(255,255,255,0.08);
   color:var(--ink-dim);cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  transition:background .15s,color .15s;min-width:0;
+  box-shadow:inset 0 1px 0.5px -0.5px rgba(255,255,255,0.55);
+  transition:background .15s,color .15s,transform .1s;min-width:0;
 }
-.vbtn:hover{background:rgba(255,255,255,0.14);color:#dbdee1}
+.vbtn:hover{background:var(--lg-sheen), rgba(255,255,255,0.16);color:#eafff5}
 .vbtn:active{transform:scale(.97)}
 .vbtn.on{background:rgba(47,183,116,0.15);color:#2fb774}
 .vbtn.muted{background:rgba(218,55,60,0.12);color:var(--live)}
@@ -498,13 +509,14 @@ body:not(.auth-body){background:transparent}
 .composer{
   display:flex;align-items:center;gap:8px;
   margin:0 16px 16px;
-  background:rgba(255,255,255,0.07);
+  background:var(--lg-sheen), rgba(255,255,255,0.07);
   border:1px solid var(--glass-brd);
-  border-radius:14px;
+  border-radius:16px;
   padding:4px 10px 4px 4px;
+  box-shadow:inset 0 1px 0.5px -0.5px rgba(255,255,255,0.5), 0 4px 14px rgba(0,25,18,0.18);
   transition:background .15s;
 }
-.composer:focus-within{background:rgba(255,255,255,0.11)}
+.composer:focus-within{background:var(--lg-sheen), rgba(255,255,255,0.12)}
 .composer .plus{
   width:32px;height:32px;border-radius:6px;
   background:none;border:none;
@@ -524,7 +536,7 @@ body:not(.auth-body){background:transparent}
 .composer .cicons svg:hover{color:#dbdee1}
 
 /* ─── Участники ───────────────────────────────────────────────────────────── */
-.members{padding:12px 10px;overflow-y:auto;background:var(--glass);border-radius:var(--r-panel)}
+.members{padding:12px 10px;overflow-y:auto;background:var(--lg-sheen), var(--glass);border-radius:var(--r-panel)}
 .members-sec{margin-bottom:6px}
 .members-sec-title{
   color:var(--ink-faint);font-size:.70rem;font-weight:700;
@@ -613,12 +625,14 @@ body:not(.auth-body){background:transparent}
 /* ─── Модальные окна ──────────────────────────────────────────────────────── */
 .modal-ov{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.70);display:flex;align-items:center;justify-content:center}
 .modal{
-  background:rgba(16, 40, 34, 0.80);
-  backdrop-filter:blur(30px);
-  -webkit-backdrop-filter:blur(30px);
+  background:var(--lg-sheen), rgba(16, 40, 34, 0.80);
+  backdrop-filter:blur(30px) saturate(185%) brightness(1.05);
+  -webkit-backdrop-filter:blur(30px) saturate(185%) brightness(1.05);
   border:1px solid var(--glass-brd);
   border-radius:var(--r-panel);width:440px;max-width:calc(100vw - 32px);overflow:hidden;
-  box-shadow:0 24px 60px rgba(0,0,0,0.45);
+  box-shadow:
+    inset 0 1.4px 0.5px -0.5px rgba(255,255,255,0.5),
+    0 24px 60px rgba(0,0,0,0.45);
 }
 .modal-wide{width:560px}
 .modal-hdr{
