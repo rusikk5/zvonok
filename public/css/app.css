@@ -56,18 +56,34 @@ body:not(.auth-body){background:#0b0e11}
 
 /* ─── Titlebar ────────────────────────────────────────────────────────────── */
 .titlebar{
-  display:grid;
-  grid-template-columns:72px 220px 1fr auto;
-  align-items:center;
-  padding:0 16px;height:38px;flex-shrink:0;
+  display:flex;
+  align-items:center;justify-content:center;
+  padding:0 16px;height:40px;flex-shrink:0;
   position:relative;z-index:6;
   background:transparent;
   border-bottom:none;
   -webkit-user-select:none;user-select:none;cursor:default;
 }
-.titlebar-rail-gap{}
-.title-actions{display:flex;gap:8px;justify-content:center;align-items:center}
-.titlebar h1{font-size:1rem;font-weight:700;text-align:center;white-space:nowrap;color:#f2f3f5}
+.app-title{
+  display:flex;align-items:center;gap:14px;
+  font-size:1rem;font-weight:700;letter-spacing:.04em;
+  white-space:nowrap;color:#f4fbf7;
+  text-shadow:0 1px 8px rgba(0,30,20,0.35);
+}
+/* Decorative dots flanking the title */
+.title-dots{display:flex;align-items:center;gap:5px}
+.title-dots i{
+  width:5px;height:5px;border-radius:50%;
+  background:#eafff5;display:block;
+  box-shadow:0 0 6px rgba(180,255,225,0.6);
+}
+.title-dots i:nth-child(1){opacity:.30}
+.title-dots i:nth-child(2){opacity:.55}
+.title-dots i:nth-child(3){opacity:.95}
+.title-dots.flip i:nth-child(1){opacity:.95}
+.title-dots.flip i:nth-child(2){opacity:.55}
+.title-dots.flip i:nth-child(3){opacity:.30}
+.traffic{position:absolute;right:16px;top:50%;transform:translateY(-50%)}
 
 /* Traffic lights */
 .traffic{display:flex;gap:8px;justify-content:flex-end}
