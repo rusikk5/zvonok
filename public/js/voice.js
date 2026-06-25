@@ -30,6 +30,9 @@ class VoiceEngine {
     this.onScreenShare      = null;  // (isSharing, stream | null)
     this.onRemoteScreen     = null;  // (userId, stream | null)
     this.onScreenShareError = null;  // (message) => void
+    this.onPing             = null;  // (ms | null, quality 'good'|'mid'|'bad')
+    this._pingTimer         = null;
+    this._lastPing          = null;
 
     // Noise suppression mode: 'off' | 'standard' | 'ghoul'
     this.noiseMode        = localStorage.getItem('zvonok_noise_mode')
@@ -103,6 +106,7 @@ class VoiceEngine {
     this.roomId = roomId;
     await this._setupMic();
     this.socket.emit('voice:join', { roomId });
+    this._startPingMonitor();
   }
 
   // Socket reconnected: re-announce to the room and rebuild peers instead of dropping the call
@@ -113,6 +117,64 @@ class VoiceEngine {
     // Mic usually still alive; only re-acquire if it was lost
     if (!this.localStream) await this._setupMic();
     this.socket.emit('voice:join', { roomId: this.roomId });
+    this._startPingMonitor();
+  }
+
+  // ── Ping / connection quality ─────────────────────────────
+  _pingQuality(ms) {
+    if (ms == null)  return 'bad';
+    if (ms < 100)    return 'good';
+    if (ms < 220)    return 'mid';
+    return 'bad';
+  }
+
+  _socketPing() {
+    return new Promise((resolve) => {
+      if (!this.socket?.connected) { resolve(null); return; }
+      const t0 = performance.now();
+      let done = false;
+      const to = setTimeout(() => { if (!done) { done = true; resolve(null); } }, 4000);
+      this.socket.emit('ping:check', () => {
+        if (done) return;
+        done = true; clearTimeout(to);
+        resolve(Math.round(performance.now() - t0));
+      });
+    });
+  }
+
+  async _measurePing() {
+    // Prefer real WebRTC round-trip to peers (that's the actual call latency)
+    let rtt = null;
+    for (const [, peer] of this.peers) {
+      try {
+        const stats = await peer.pc.getStats();
+        stats.forEach((r) => {
+          if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && r.currentRoundTripTime != null) {
+            const ms = r.currentRoundTripTime * 1000;
+            if (rtt === null || ms < rtt) rtt = ms;
+          }
+        });
+      } catch {}
+    }
+    if (rtt !== null) return Math.round(rtt);
+    // Solo in channel (no peers) → fall back to socket round-trip to the server
+    return await this._socketPing();
+  }
+
+  _startPingMonitor() {
+    this._stopPingMonitor();
+    const poll = async () => {
+      const ms = await this._measurePing();
+      this._lastPing = ms;
+      if (this.onPing) this.onPing(ms, this._pingQuality(ms));
+    };
+    poll();
+    this._pingTimer = setInterval(poll, 3000);
+  }
+
+  _stopPingMonitor() {
+    if (this._pingTimer) { clearInterval(this._pingTimer); this._pingTimer = null; }
+    this._lastPing = null;
   }
 
   async _setupMic() {
@@ -212,6 +274,7 @@ class VoiceEngine {
 
   leave() {
     this.stopScreenShare();
+    this._stopPingMonitor();
     if (this.roomId) this.socket.emit('voice:leave', { roomId: this.roomId });
     this.peers.forEach((_, sid) => this._cleanPeer(sid));
     this._volCtxs.forEach(ctx => ctx.close().catch(() => {}));

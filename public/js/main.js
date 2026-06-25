@@ -202,6 +202,7 @@ function setupSocket() {
   S.voice.init(S.socket, S.me.id);
   S.voice.onSpeaking   = onSpeaking;
   S.voice.onUserLeft   = onVoiceLeft;
+  S.voice.onPing       = updateVoicePing;
   S.voice.onUserJoined = (uid) => {
     const isNew = !S.voiceUsers.has(uid);
     if (isNew) S.voiceUsers.set(uid, { muted: false, speaking: false });
@@ -365,6 +366,17 @@ function setupSocket() {
       toast('Звонок завершён');
     }
   });
+}
+
+function updateVoicePing(ms, quality) {
+  const panel = $('voice-status');
+  if (!panel) return;
+  panel.classList.remove('q-good', 'q-mid', 'q-bad');
+  panel.classList.add('q-' + (quality || 'bad'));
+  const label = (ms == null) ? '—' : ms + ' мс';
+  panel.title = 'Пинг: ' + label;
+  const pingEl = $('vs-ping');
+  if (pingEl) pingEl.textContent = (ms == null) ? '' : '  ·  ' + ms + ' мс';
 }
 
 function onSpeaking(userId, speaking) {
@@ -665,6 +677,8 @@ function endDMCall(notifyOther = true) {
   S.muted = false;
   updateMuteBtn();
   $('voice-status').classList.add('hidden');
+  $('voice-status').classList.remove('q-mid', 'q-bad'); $('voice-status').classList.add('q-good');
+  $('vs-ping').textContent = '';
   $('dm-call-ov').classList.add('hidden');
   $('dmc-audio-panel').classList.add('hidden');
   S.dmCallWith  = null;
@@ -704,6 +718,8 @@ function leaveVoice() {
   $('btn-voice').textContent = 'Войти';
   $('btn-voice').classList.remove('in-voice');
   $('voice-status').classList.add('hidden');
+  $('voice-status').classList.remove('q-mid', 'q-bad'); $('voice-status').classList.add('q-good');
+  $('vs-ping').textContent = '';
   S.muted = false;
   updateMuteBtn();
   stopVoiceTimer();

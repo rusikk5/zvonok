@@ -706,6 +706,8 @@ io.on('connection', async socket => {
     } catch {}
   });
 
+  socket.on('ping:check', (cb) => { if (typeof cb === 'function') cb(); });
+
   socket.on('voice:leave', ({ roomId }) => voiceLeave(socket, uid, roomId));
   socket.on('voice:offer',  ({ to, offer })     => io.to(to).emit('voice:offer',  { from: socket.id, fromUser: uid, offer }));
   socket.on('voice:answer', ({ to, answer })    => io.to(to).emit('voice:answer', { from: socket.id, answer }));
