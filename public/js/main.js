@@ -1897,10 +1897,20 @@ function setupUI() {
 
   // Screen overlay controls
   $('btn-screen-ov-close').addEventListener('click', () => $('screen-ov').classList.add('hidden'));
-  $('btn-screen-ov-fs').addEventListener('click', () => {
+  const _screenFullscreen = () => {
     const vid = $('screen-ov-video');
-    if (vid.requestFullscreen) vid.requestFullscreen();
-    else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
+    const box = $('screen-ov');
+    try {
+      if (vid.requestFullscreen)            vid.requestFullscreen().catch(() => box.requestFullscreen?.());
+      else if (vid.webkitEnterFullscreen)   vid.webkitEnterFullscreen();      // iOS Safari (native video)
+      else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
+      else if (box.requestFullscreen)       box.requestFullscreen();
+    } catch {}
+  };
+  $('btn-screen-ov-fs').addEventListener('click', _screenFullscreen);
+  // Phone: tap the video itself to go fullscreen
+  $('screen-ov-video').addEventListener('click', () => {
+    if (window.matchMedia('(max-width:760px)').matches) _screenFullscreen();
   });
 
   // Screen picker: share button

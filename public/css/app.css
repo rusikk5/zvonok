@@ -865,6 +865,10 @@ input[type=range]{accent-color:#2fb774;cursor:pointer}
   .server{width:44px;height:44px}
   .server canvas{width:32px;height:32px}
   .screen-ov{width:94vw;left:3vw;right:auto;bottom:12px}
+  .screen-ov-bar{padding:10px 12px;font-size:.85rem}
+  .screen-ov-btn{padding:8px 12px}
+  .screen-ov-btn svg{width:20px;height:20px}
+  .screen-ov video{cursor:pointer}
   .modal{width:calc(100vw - 24px)}
 }
 
