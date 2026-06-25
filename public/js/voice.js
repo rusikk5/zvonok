@@ -123,8 +123,8 @@ class VoiceEngine {
   // ── Ping / connection quality ─────────────────────────────
   _pingQuality(ms) {
     if (ms == null)  return 'bad';
-    if (ms < 100)    return 'good';
-    if (ms < 220)    return 'mid';
+    if (ms <= 200)   return 'good';
+    if (ms <= 1000)  return 'mid';
     return 'bad';
   }
 
