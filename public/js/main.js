@@ -241,6 +241,11 @@ async function init() {
   setupUI();
   await Promise.all([loadRooms(), loadFriends()]);
   if (S.rooms.length > 0) selectRoom(S.rooms[0].id);
+  // On phones, reveal the channels drawer on first load so navigation is obvious
+  if (window.matchMedia('(max-width:760px)').matches) {
+    document.querySelector('.sidebar')?.classList.add('m-open');
+    $('m-backdrop')?.classList.add('show');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -498,7 +503,14 @@ function renderRoomIcons() {
     </div>
   `).join('');
   el.querySelectorAll('[data-rid]').forEach(btn => {
-    btn.addEventListener('click', () => selectRoom(btn.dataset.rid));
+    btn.addEventListener('click', () => {
+      selectRoom(btn.dataset.rid);
+      // Phone: reveal that server's channels right away
+      if (window.matchMedia('(max-width:760px)').matches) {
+        document.querySelector('.sidebar')?.classList.add('m-open');
+        $('m-backdrop')?.classList.add('show');
+      }
+    });
   });
 }
 

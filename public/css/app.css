@@ -822,6 +822,8 @@ input[type=range]{accent-color:#2fb774;cursor:pointer}
 
 /* ─── Телефон ─────────────────────────────────────────────────────────────── */
 @media(max-width:760px){
+  *{-webkit-tap-highlight-color:transparent}
+  .chat-scroll,.sidebar,.members{overscroll-behavior:contain}
   .titlebar{height:46px}
   .traffic{display:none}                 /* no window controls on mobile */
   .m-menu-btn{display:flex;align-items:center;justify-content:center}
