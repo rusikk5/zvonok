@@ -33,6 +33,7 @@ class VoiceEngine {
     this.onPing             = null;  // (ms | null, quality 'good'|'mid'|'bad')
     this._pingTimer         = null;
     this._lastPing          = null;
+    this.onConnState        = null;  // (stage {key,label,color} | null) — RTC connection stages
 
     // Noise suppression mode: 'off' | 'standard' | 'ghoul'
     this.noiseMode        = localStorage.getItem('zvonok_noise_mode')
@@ -53,6 +54,8 @@ class VoiceEngine {
   _signaling() {
     this.socket.on('voice:init', async (participants) => {
       for (const p of participants) await this._offer(p.socketId, p.userId);
+      this._joining = false;
+      this._emitConnState();
     });
 
     this.socket.on('voice:joined', ({ userId }) => {
@@ -91,6 +94,7 @@ class VoiceEngine {
 
     this.socket.on('voice:left', ({ userId, socketId }) => {
       this._cleanPeer(socketId);
+      this._emitConnState();
       if (this.onUserLeft) this.onUserLeft(userId);
     });
 
@@ -104,14 +108,45 @@ class VoiceEngine {
 
   async join(roomId) {
     this.roomId = roomId;
+    this._joining = true;
+    if (this.onConnState) this.onConnState({ key: 'joining', label: 'Подключение к каналу…', color: 'mid' });
     await this._setupMic();
     this.socket.emit('voice:join', { roomId });
     this._startPingMonitor();
   }
 
+  // ── RTC connection stage (so users can see where it gets stuck) ──
+  _peerRank(pc) {
+    const c = pc.connectionState, i = pc.iceConnectionState;
+    if (c === 'failed'  || i === 'failed')       return 0;  // failed
+    if (c === 'disconnected' || i === 'disconnected') return 1;  // reconnecting
+    if (c === 'connected' || c === 'completed')  return 3;  // connected
+    return 2;                                                 // connecting (new/checking)
+  }
+
+  _emitConnState() {
+    if (!this.onConnState) return;
+    if (!this.roomId) { this.onConnState(null); return; }
+    if (this._joining)  { this.onConnState({ key: 'joining', label: 'Подключение к каналу…', color: 'mid' }); return; }
+
+    const peers = [...this.peers.values()];
+    if (peers.length === 0) { this.onConnState({ key: 'connected', label: 'Подключено', color: 'good' }); return; }
+
+    let min = 3;
+    for (const p of peers) min = Math.min(min, this._peerRank(p.pc));
+    const stage =
+      min === 0 ? { key: 'failed',       label: 'Не удалось подключиться', color: 'bad'  } :
+      min === 1 ? { key: 'reconnecting', label: 'Переподключение…',        color: 'mid'  } :
+      min === 2 ? { key: 'connecting',   label: 'Установка соединения…',   color: 'mid'  } :
+                  { key: 'connected',    label: 'Подключено',              color: 'good' };
+    this.onConnState(stage);
+  }
+
   // Socket reconnected: re-announce to the room and rebuild peers instead of dropping the call
   async rejoin() {
     if (!this.roomId) return;
+    this._joining = true;
+    if (this.onConnState) this.onConnState({ key: 'joining', label: 'Переподключение…', color: 'mid' });
     // Old peer connections reference dead socket ids — tear them down
     this.peers.forEach((_, sid) => this._cleanPeer(sid));
     // Mic usually still alive; only re-acquire if it was lost
@@ -289,6 +324,8 @@ class VoiceEngine {
     this.disableCamera();
     if (this.onSpeaking) this.onSpeaking(this.myUserId, false);
     this.roomId = null;
+    this._joining = false;
+    if (this.onConnState) this.onConnState(null);
   }
 
   _offer(socketId, userId) {
@@ -357,13 +394,14 @@ class VoiceEngine {
 
     pc.oniceconnectionstatechange = () => {
       if (pc.iceConnectionState === 'failed') { try { pc.restartIce(); } catch {} }
+      this._emitConnState();
     };
 
     pc.onconnectionstatechange = () => {
-      if (['failed', 'closed'].includes(pc.connectionState)) {
-        this._cleanPeer(socketId);
-        if (this.onUserLeft) this.onUserLeft(userId);
-      }
+      if (pc.connectionState === 'failed') { try { pc.restartIce(); } catch {} }
+      // Note: don't tear the peer down on 'failed' — show the honest "не удалось" state and
+      // let ICE restart try to recover. Departures are handled by the server's voice:left.
+      this._emitConnState();
     };
 
     // Add local tracks LAST so handlers (incl. onnegotiationneeded) are wired first
@@ -379,6 +417,7 @@ class VoiceEngine {
       this._screenSenders.set(socketId, senders);
     }
 
+    this._emitConnState();
     return pc;
   }
 

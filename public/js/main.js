@@ -251,6 +251,7 @@ function setupSocket() {
   S.voice.onSpeaking   = onSpeaking;
   S.voice.onUserLeft   = onVoiceLeft;
   S.voice.onPing       = updateVoicePing;
+  S.voice.onConnState  = updateVoiceConn;
   S.voice.onUserJoined = (uid) => {
     const isNew = !S.voiceUsers.has(uid);
     if (isNew) S.voiceUsers.set(uid, { muted: false, speaking: false });
@@ -423,7 +424,28 @@ function setupSocket() {
   });
 }
 
+// RTC connection stages — shows where the connection is (or where it got stuck)
+function updateVoiceConn(stage) {
+  const panel  = $('voice-status');
+  const statEl = $('vs-status');
+  if (!panel || !statEl) return;
+  if (!stage) {   // left voice
+    S.voiceConnected = false;
+    statEl.textContent = 'Голосовая связь';
+    panel.classList.remove('q-good', 'q-mid', 'q-bad');
+    $('vs-ping').textContent = '';
+    panel.title = '';
+    return;
+  }
+  S.voiceConnected = stage.key === 'connected';
+  statEl.textContent = stage.label;
+  panel.classList.remove('q-good', 'q-mid', 'q-bad');
+  panel.classList.add('q-' + stage.color);
+  if (!S.voiceConnected) { $('vs-ping').textContent = ''; panel.title = stage.label; }
+}
+
 function updateVoicePing(ms, quality) {
+  if (!S.voiceConnected) return;   // while connecting, the stage label owns the display
   const panel = $('voice-status');
   if (!panel) return;
   panel.classList.remove('q-good', 'q-mid', 'q-bad');
