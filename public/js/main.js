@@ -33,6 +33,7 @@ const S = {
   dmCallState: null,     // 'calling' | 'connected'
   dmCallTimeout: null,
   screenSharing: false,
+  screenWindows: new Map(),  // userId -> floating screen-share window element
   myStatus:    localStorage.getItem('zvonok_status') || 'online',
   statuses:    new Map(), // userId -> 'online'|'dnd'  (invisible = offline)
   dmConvos:    [],        // recent DM conversations
@@ -764,6 +765,7 @@ function endDMCall(notifyOther = true) {
   $('vs-ping').textContent = '';
   $('dm-call-ov').classList.add('hidden');
   $('dmc-audio-panel').classList.add('hidden');
+  closeAllScreenWindows();
   S.dmCallWith  = null;
   S.dmCallState = null;
 }
@@ -811,7 +813,16 @@ function leaveVoice() {
   S.voice.disableCamera();
   $('camera-pip').classList.add('hidden');
   $('btn-vs-camera').classList.remove('on');
+  closeAllScreenWindows();
   // Screen share cleanup is handled via voice.leave() → stopScreenShare() → onScreenShare callback
+}
+
+function closeAllScreenWindows() {
+  for (const win of S.screenWindows.values()) {
+    try { win.querySelector('video').srcObject = null; } catch {}
+    win.remove();
+  }
+  S.screenWindows.clear();
 }
 
 function toggleMute() {
@@ -1185,6 +1196,72 @@ const COLOR_PRESETS = [
   '#4ec9b0','#f08a5d','#6bcfef','#e4a9f3','#ff6b6b',
   '#ffd93d','#6bcb77','#4d96ff','#ffffff','#aaaaaa',
 ];
+
+// ── Received screen-share windows (one floating window per sharer, Discord-style) ──
+let _screenZ = 600;
+function _enterFullscreen(vid, box) {
+  try {
+    if (vid.requestFullscreen)            vid.requestFullscreen().catch(() => box.requestFullscreen?.());
+    else if (vid.webkitEnterFullscreen)   vid.webkitEnterFullscreen();      // iOS Safari (native video)
+    else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
+    else if (box.requestFullscreen)       box.requestFullscreen();
+  } catch {}
+}
+function _makeDraggable(win, handle) {
+  let sx, sy, ox, oy, dragging = false;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    dragging = true;
+    const r = win.getBoundingClientRect();
+    win.style.right = 'auto'; win.style.bottom = 'auto';
+    win.style.left = r.left + 'px'; win.style.top = r.top + 'px';
+    ox = r.left; oy = r.top; sx = e.clientX; sy = e.clientY;
+    win.style.zIndex = ++_screenZ;
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const nx = Math.max(0, Math.min(window.innerWidth  - 80, ox + (e.clientX - sx)));
+    const ny = Math.max(0, Math.min(window.innerHeight - 40, oy + (e.clientY - sy)));
+    win.style.left = nx + 'px'; win.style.top = ny + 'px';
+  });
+  const end = (e) => { dragging = false; try { handle.releasePointerCapture(e.pointerId); } catch {} };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+}
+function makeScreenWindow(userId, stream) {
+  const user = (S.members || []).find(m => m.id === userId);
+  const name = user?.name || 'Участник';
+  const n    = S.screenWindows.size;
+  const win  = document.createElement('div');
+  win.className = 'screen-ov';
+  win.dataset.uid = userId;
+  win.style.right  = (24 + (n % 4) * 28) + 'px';
+  win.style.bottom = (24 + (n % 4) * 28) + 'px';
+  win.style.zIndex = ++_screenZ;
+  win.innerHTML = `
+    <div class="screen-ov-bar">
+      <span>${escHtml(name)} демонстрирует экран</span>
+      <div style="display:flex;gap:6px">
+        <button class="screen-ov-btn js-fs" title="Полный экран">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+        <button class="screen-ov-btn js-close" title="Закрыть">✕</button>
+      </div>
+    </div>
+    <video autoplay playsinline muted></video>`;
+  const vid = win.querySelector('video');
+  vid.srcObject = stream;
+  vid.play().catch(() => {});
+  win.querySelector('.js-fs').addEventListener('click', () => _enterFullscreen(vid, win));
+  win.querySelector('.js-close').addEventListener('click', () => { vid.srcObject = null; win.remove(); S.screenWindows.delete(userId); });
+  vid.addEventListener('click', () => { if (window.matchMedia('(max-width:760px)').matches) _enterFullscreen(vid, win); });
+  win.addEventListener('pointerdown', () => { win.style.zIndex = ++_screenZ; }, true);
+  _makeDraggable(win, win.querySelector('.screen-ov-bar'));
+  $('screen-windows').appendChild(win);
+  S.screenWindows.set(userId, win);
+  return win;
+}
 
 // ── Screen share picker ───────────────────────────────────────
 const MONITOR_ICON = `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
@@ -1895,23 +1972,7 @@ function setupUI() {
   $('btn-screen-share-stop').addEventListener('click', () => S.voice.stopScreenShare());
   $('btn-stop-share').addEventListener('click', () => S.voice.stopScreenShare());
 
-  // Screen overlay controls
-  $('btn-screen-ov-close').addEventListener('click', () => $('screen-ov').classList.add('hidden'));
-  const _screenFullscreen = () => {
-    const vid = $('screen-ov-video');
-    const box = $('screen-ov');
-    try {
-      if (vid.requestFullscreen)            vid.requestFullscreen().catch(() => box.requestFullscreen?.());
-      else if (vid.webkitEnterFullscreen)   vid.webkitEnterFullscreen();      // iOS Safari (native video)
-      else if (vid.webkitRequestFullscreen) vid.webkitRequestFullscreen();
-      else if (box.requestFullscreen)       box.requestFullscreen();
-    } catch {}
-  };
-  $('btn-screen-ov-fs').addEventListener('click', _screenFullscreen);
-  // Phone: tap the video itself to go fullscreen
-  $('screen-ov-video').addEventListener('click', () => {
-    if (window.matchMedia('(max-width:760px)').matches) _screenFullscreen();
-  });
+  // (Per-sharer screen windows are created dynamically — see S.voice.onRemoteScreen below)
 
   // Screen picker: share button
   $('btn-sp-share').addEventListener('click', async () => {
@@ -1949,16 +2010,19 @@ function setupUI() {
 
   S.voice.onScreenShareError = (msg) => toast('Демонстрация экрана: ' + msg, 'error');
 
-  // Wire voice.onRemoteScreen callback
+  // Wire voice.onRemoteScreen callback — a separate floating window per sharer (Discord-style)
   S.voice.onRemoteScreen = (userId, stream) => {
-    const ov  = $('screen-ov');
-    const vid = $('screen-ov-video');
-    if (!stream) { vid.srcObject = null; ov.classList.add('hidden'); return; }
-    const user = (S.members || []).find(m => m.id === userId);
-    $('screen-ov-who').textContent = (user?.name || 'Участник') + ' демонстрирует экран';
-    vid.srcObject = stream;
-    vid.play().catch(() => {});
-    ov.classList.remove('hidden');
+    const existing = S.screenWindows.get(userId);
+    if (!stream) {
+      if (existing) { existing.querySelector('video').srcObject = null; existing.remove(); S.screenWindows.delete(userId); }
+      return;
+    }
+    if (existing) {
+      const v = existing.querySelector('video');
+      v.srcObject = stream; v.play().catch(() => {});
+      return;
+    }
+    makeScreenWindow(userId, stream);
   };
 
   // Text channel actions

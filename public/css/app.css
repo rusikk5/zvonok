@@ -386,8 +386,8 @@ body:not(.auth-body){background:transparent}
 .sp-opts{display:flex;flex-direction:column;gap:10px;padding-top:4px;border-top:1px solid #2b2d31}
 .sp-opt-row{display:flex;align-items:center;justify-content:space-between;font-size:.85rem}
 /* Received screen overlay */
-.screen-ov{position:fixed;bottom:24px;right:24px;width:380px;background:#111214;border:1px solid #3a3c41;border-radius:10px;overflow:hidden;z-index:500;box-shadow:0 8px 32px #000a;resize:both}
-.screen-ov-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#1a1b1e;font-size:.78rem;color:var(--ink-dim);gap:8px}
+.screen-ov{position:fixed;bottom:24px;right:24px;width:420px;min-width:220px;min-height:160px;background:#111214;border:1px solid #3a3c41;border-radius:12px;overflow:hidden;z-index:600;box-shadow:0 12px 40px #000b;resize:both}
+.screen-ov-bar{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#1a1b1e;font-size:.78rem;color:var(--ink-dim);gap:8px;cursor:move;user-select:none;-webkit-user-select:none;touch-action:none}
 .screen-ov-bar span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .screen-ov-btn{background:none;border:none;color:var(--ink-dim);cursor:pointer;padding:3px 6px;border-radius:4px;display:flex;align-items:center}
 .screen-ov-btn:hover{background:rgba(255,255,255,0.08);color:var(--ink)}
@@ -864,11 +864,15 @@ input[type=range]{accent-color:#2fb774;cursor:pointer}
   .vbtn{height:46px}
   .server{width:44px;height:44px}
   .server canvas{width:32px;height:32px}
-  .screen-ov{width:94vw;left:3vw;right:auto;bottom:12px}
-  .screen-ov-bar{padding:10px 12px;font-size:.85rem}
+  /* Received screen shares stack full-width at the bottom (no fiddly floating windows) */
+  #screen-windows{position:fixed;left:0;right:0;bottom:0;z-index:600;
+    display:flex;flex-direction:column;gap:8px;padding:8px;pointer-events:none;max-height:70vh;overflow-y:auto}
+  #screen-windows > .screen-ov{position:static!important;width:100%!important;height:auto!important;
+    resize:none;pointer-events:auto;box-shadow:0 6px 24px #000a}
+  .screen-ov-bar{padding:11px 12px;font-size:.85rem;cursor:default;touch-action:auto}
   .screen-ov-btn{padding:8px 12px}
   .screen-ov-btn svg{width:20px;height:20px}
-  .screen-ov video{cursor:pointer}
+  .screen-ov video{cursor:pointer;max-height:46vh}
   .modal{width:calc(100vw - 24px)}
 }
 

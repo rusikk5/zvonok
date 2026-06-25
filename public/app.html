@@ -573,19 +573,8 @@
   </div>
 </div>
 
-<!-- Received screen share overlay -->
-<div class="screen-ov hidden" id="screen-ov">
-  <div class="screen-ov-bar">
-    <span id="screen-ov-who">Демонстрация экрана</span>
-    <div style="display:flex;gap:6px">
-      <button class="screen-ov-btn" id="btn-screen-ov-fs" title="Полный экран">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-      </button>
-      <button class="screen-ov-btn" id="btn-screen-ov-close" title="Закрыть">✕</button>
-    </div>
-  </div>
-  <video id="screen-ov-video" autoplay playsinline muted></video>
-</div>
+<!-- Received screen shares: one floating window per sharer, created dynamically in #screen-windows -->
+<div id="screen-windows"></div>
 
 <!-- Own screen share preview (self-view) -->
 <div class="screen-ov screen-self hidden" id="screen-self-ov">
