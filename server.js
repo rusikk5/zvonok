@@ -373,6 +373,27 @@ app.post('/api/me/avatar', auth, upload.single('avatar'), async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Ошибка сервера' }); }
 });
 
+// ICE servers for WebRTC. Set your own TURN via env for reliable connections:
+//   TURN_URL=turn:your.host:3478  TURN_USER=user  TURN_CRED=pass
+app.get('/api/ice', (_req, res) => {
+  const list = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ];
+  if (process.env.TURN_URL) {
+    list.push({
+      urls: process.env.TURN_URL.split(',').map(s => s.trim()),
+      username: process.env.TURN_USER || '',
+      credential: process.env.TURN_CRED || '',
+    });
+  } else {
+    // Free public fallback (best-effort; get your own TURN for production)
+    for (const u of ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'])
+      list.push({ urls: u, username: 'openrelayproject', credential: 'openrelayproject' });
+  }
+  res.json(list);
+});
+
 // Serve avatar image bytes from the DB (public — used directly in <img src>)
 app.get('/api/avatar/:id', async (req, res) => {
   try {

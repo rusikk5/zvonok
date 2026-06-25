@@ -335,12 +335,7 @@ class VoiceEngine {
 
   _makePeer(socketId, userId) {
     const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun3.l.google.com:19302' },
-      ]
+      iceServers: VoiceEngine.ICE_SERVERS,
     });
 
     // Deterministic politeness: exactly one side is polite (compares own vs remote socket id)
@@ -673,5 +668,25 @@ class VoiceEngine {
     } catch { return { mics: [], speakers: [] }; }
   }
 }
+
+// STUN finds your public address; TURN relays media when direct P2P is impossible
+// (symmetric NAT / mobile / strict firewall). Without TURN such pairs never connect.
+VoiceEngine.ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'turn:openrelay.metered.ca:80',                 username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443',                username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp',  username: 'openrelayproject', credential: 'openrelayproject' },
+];
+
+// Optionally replace with server-provided config (so you can plug your own TURN via env)
+VoiceEngine.loadIceConfig = async function () {
+  try {
+    const r = await fetch('/api/ice');
+    if (!r.ok) return;
+    const list = await r.json();
+    if (Array.isArray(list) && list.length) VoiceEngine.ICE_SERVERS = list;
+  } catch {}
+};
 
 window.VoiceEngine = VoiceEngine;

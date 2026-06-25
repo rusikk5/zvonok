@@ -236,6 +236,7 @@ async function init() {
     return (location.href = '/');
   }
   renderUserBar();
+  VoiceEngine.loadIceConfig();   // fetch TURN/STUN config (so P2P works behind strict NAT)
   setupSocket();
   setupUI();
   await Promise.all([loadRooms(), loadFriends()]);
