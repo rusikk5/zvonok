@@ -811,8 +811,52 @@ input[type=range]{accent-color:#2fb774;cursor:pointer}
 .sidebar .stretch::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.08)}
 
 /* ─── Адаптив ─────────────────────────────────────────────────────────────── */
-@media(max-width:900px){.members{display:none}.app{grid-template-columns:68px 220px 1fr}}
-@media(max-width:680px){.sidebar{display:none}.app{grid-template-columns:68px 1fr}}
+@media(max-width:1100px){.members{display:none}.app{grid-template-columns:54px 230px 1fr}}
+
+/* Hamburger + drawer backdrop (mobile only) */
+.m-menu-btn{display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:#eafff5;cursor:pointer;padding:6px;border-radius:8px;z-index:7}
+.m-backdrop{display:none;position:fixed;inset:0;z-index:390;background:rgba(0,0,0,.45);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.m-backdrop.show{display:block}
+
+/* ─── Телефон ─────────────────────────────────────────────────────────────── */
+@media(max-width:760px){
+  .titlebar{height:46px}
+  .traffic{display:none}                 /* no window controls on mobile */
+  .m-menu-btn{display:flex;align-items:center;justify-content:center}
+
+  .app{grid-template-columns:50px 1fr;gap:0;padding:0}
+  .rail{padding:8px 0}                     /* keep the thin server strip for switching servers */
+
+  /* Channels = slide-in drawer from the left (next to the server strip) */
+  .sidebar{
+    display:flex;position:fixed;top:46px;left:50px;bottom:0;
+    width:min(82vw,300px);z-index:400;padding:8px;gap:8px;
+    transform:translateX(-115%);transition:transform .25s ease;
+    overflow-y:auto;
+  }
+  .sidebar.m-open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.5)}
+
+  /* Chat fills the screen, square edges */
+  .chat{border-radius:0}
+  .chat-hdr{padding-left:14px}
+
+  /* Members = slide-in drawer from the right (toggled by the people button) */
+  .members{
+    display:flex;flex-direction:column;position:fixed;top:46px;right:0;bottom:0;
+    width:min(82vw,300px);z-index:400;border-radius:0;
+    transform:translateX(110%);transition:transform .25s ease;
+  }
+  .members.m-open{display:flex;transform:none;box-shadow:0 0 40px rgba(0,0,0,.5)}
+
+  /* Bigger touch targets */
+  .tch-row,.vch-row{padding:9px 10px}
+  .vbtn{height:42px}
+  .composer{margin:0 10px 10px}
+  .screen-ov{width:92vw;right:4vw;bottom:12px}
+}
+
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
 /* ─── Status menu ─────────────────────────────────────────────────────────── */

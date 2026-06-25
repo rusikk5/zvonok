@@ -2,16 +2,29 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Звонок</title>
 <link rel="icon" type="image/png" href="/icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#123a31">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/icon.png">
 <link rel="stylesheet" href="/css/app.css">
+<script>
+  if ('serviceWorker' in navigator)
+    window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+</script>
 </head>
 <body>
 
 <div class="window">
 
   <div class="titlebar">
+    <button class="m-menu-btn" id="btn-m-menu" aria-label="Каналы">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <h1 class="app-title">
       <span class="title-dots"><i></i><i></i><i></i></span>
       Звонок
@@ -19,6 +32,7 @@
     </h1>
     <div class="traffic"><i class="y"></i><i class="g"></i><i class="r"></i></div>
   </div>
+  <div class="m-backdrop" id="m-backdrop"></div>
 
   <div class="app">
 
@@ -672,9 +686,10 @@ if (window.electronAPI) {
     document.body.appendChild(banner);
   });
 
-  // Titlebar drag with Discord-snap
+  // Titlebar drag with Discord-snap (desktop/Electron only)
   let _drag = false;
   document.querySelector('.titlebar').addEventListener('mousedown', e => {
+    if (!window.electronAPI?.dragStart) return;   // mobile/web: no window dragging
     if (e.button !== 0) return;
     if (e.target.closest('input, button, .traffic, .search')) return;
     e.preventDefault();

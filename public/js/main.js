@@ -1356,6 +1356,29 @@ function hideModal(id) { $(id).classList.add('hidden'); }
 // UI event wiring
 // ═══════════════════════════════════════════════════════════════
 function setupUI() {
+  // ── Mobile drawers (channels / members) ──
+  const _sidebar = document.querySelector('.sidebar');
+  const _members = $('members-panel');
+  const _backdrop = $('m-backdrop');
+  const isMobile = () => window.matchMedia('(max-width:760px)').matches;
+  window.closeDrawers = () => {
+    _sidebar?.classList.remove('m-open');
+    _members?.classList.remove('m-open');
+    _backdrop?.classList.remove('show');
+  };
+  const _openDrawer = (which) => {
+    window.closeDrawers();
+    (which === 'members' ? _members : _sidebar)?.classList.add('m-open');
+    _backdrop?.classList.add('show');
+  };
+  $('btn-m-menu')?.addEventListener('click', () =>
+    _sidebar?.classList.contains('m-open') ? window.closeDrawers() : _openDrawer('channels'));
+  _backdrop?.addEventListener('click', window.closeDrawers);
+  // Tapping a text channel closes the drawer so the chat is visible
+  _sidebar?.addEventListener('click', (e) => {
+    if (isMobile() && e.target.closest('.tch-row')) window.closeDrawers();
+  });
+
   // Close modal on overlay click / X
   document.querySelectorAll('.modal-ov').forEach(ov => {
     ov.addEventListener('click', e => { if (e.target === ov) { hideModal(ov.id); stopMicMeter(); } });
@@ -1922,6 +1945,14 @@ function setupUI() {
 
   // Text channel actions
   $('btn-toggle-members-ch').addEventListener('click', () => {
+    if (window.matchMedia('(max-width:760px)').matches) {
+      // Mobile: slide the members panel in as a drawer
+      const m = $('members-panel');
+      const open = m.classList.contains('m-open');
+      window.closeDrawers?.();
+      if (!open) { m.classList.add('m-open'); $('m-backdrop')?.classList.add('show'); }
+      return;
+    }
     S.showMembers = !S.showMembers;
     $('members-panel').style.display = S.showMembers ? '' : 'none';
   });
