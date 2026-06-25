@@ -487,7 +487,9 @@ class VoiceEngine {
                 height: { ideal: height },
                 cursor: 'never',
               },
-              audio: !!audio,
+              // echoCancellation cancels the browser's OWN render (the call voices) from the
+              // captured system audio, but leaves external app/game sound → no doubled voices.
+              audio: audio ? { echoCancellation: true, noiseSuppression: false, autoGainControl: false } : false,
             });
             got = true;
           } catch { got = false; }
@@ -499,7 +501,7 @@ class VoiceEngine {
             chromeMediaSourceId: sourceId,
             maxWidth: width, maxHeight: height, maxFrameRate: fps,
           } };
-          const audioOpt = audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false;
+          const audioOpt = audio ? { mandatory: { chromeMediaSource: 'desktop', googEchoCancellation: true } } : false;
           try {
             this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: audioOpt });
           } catch {
@@ -512,7 +514,7 @@ class VoiceEngine {
       } else {
         // Fallback: entire desktop (capture system audio in the SAME call — required on Windows)
         const video = { mandatory: { chromeMediaSource: 'desktop', maxWidth: width, maxHeight: height, maxFrameRate: fps } };
-        const audioOpt = audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false;
+        const audioOpt = audio ? { mandatory: { chromeMediaSource: 'desktop', googEchoCancellation: true } } : false;
         try {
           this.screenStream = await navigator.mediaDevices.getUserMedia({ video, audio: audioOpt });
         } catch {
@@ -569,7 +571,7 @@ class VoiceEngine {
     try {
       fullStream = await navigator.mediaDevices.getUserMedia({
         video: video0,
-        audio: audio ? { mandatory: { chromeMediaSource: 'desktop' } } : false,
+        audio: audio ? { mandatory: { chromeMediaSource: 'desktop', googEchoCancellation: true } } : false,
       });
     } catch {
       fullStream = await navigator.mediaDevices.getUserMedia({ video: video0, audio: false });
