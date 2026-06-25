@@ -180,6 +180,8 @@ function playRingSound() {
 // Init
 // ═══════════════════════════════════════════════════════════════
 async function init() {
+  // Enable translucent (glass) styling only where the OS provides real blur (Win11/macOS)
+  if (window.electronAPI?.translucent) document.querySelector('.window')?.classList.add('translucent');
   if (!S.token) return (location.href = '/');
   try {
     S.me = await api('/api/me');

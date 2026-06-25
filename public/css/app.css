@@ -41,16 +41,34 @@ body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;color:var(--ink)}
 body:not(.auth-body){background:transparent}
 
 /* ─── Главное окно ────────────────────────────────────────────────────────── */
-/* Semi-transparent teal tint over the OS blur (acrylic / vibrancy) — desktop shows through */
+/* Default: SOLID teal theme (Windows 10 / browsers — no OS blur, so no see-through) */
 .window{
   position:relative;width:100vw;height:100vh;
+  background:
+    radial-gradient(125% 85% at 18% -5%, rgba(150,224,196,0.55), transparent 58%),
+    radial-gradient(110% 95% at 105% 108%, rgba(120,196,150,0.50), transparent 55%),
+    radial-gradient(90% 70% at 85% 0%, rgba(180,224,200,0.35), transparent 60%),
+    linear-gradient(158deg, #2f7a64 0%, #3a8a6f 34%, #4e9874 66%, #66a86c 100%);
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:transform .2s ease,opacity .2s ease;
+}
+/* Translucent: real OS blur behind (Win11 acrylic / macOS vibrancy) — desktop shows through */
+.window.translucent{
   background:
     radial-gradient(125% 85% at 18% -5%, rgba(150,224,196,0.40), transparent 58%),
     radial-gradient(110% 95% at 105% 108%, rgba(120,196,150,0.36), transparent 55%),
     radial-gradient(90% 70% at 85% 0%, rgba(180,224,200,0.24), transparent 60%),
     linear-gradient(158deg, rgba(40,120,98,0.58) 0%, rgba(60,140,108,0.54) 40%, rgba(95,160,105,0.50) 100%);
-  display:flex;flex-direction:column;overflow:hidden;
-  transition:transform .2s ease,opacity .2s ease;
+}
+/* Perf: without real blur behind, panel backdrop-blur only blurs a static gradient — skip it */
+.window:not(.translucent) .glass,
+.window:not(.translucent) .sidebar,
+.window:not(.translucent) .chat,
+.window:not(.translucent) .members,
+.window:not(.translucent) .server,
+.window:not(.translucent) .modal{
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
 }
 .window.win-minimizing{transform:scale(.90) translateY(70px);opacity:0}
 .window.win-closing{transform:scale(.96);opacity:0;transition:transform .15s ease,opacity .15s ease}

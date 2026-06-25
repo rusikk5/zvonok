@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   isElectron: true,
+  translucent: process.argv.includes('--translucent'),  // OS blur (acrylic/vibrancy) active
   minimize:  () => ipcRenderer.send('win:minimize'),
   maximize:  () => ipcRenderer.send('win:maximize'),
   close:     () => ipcRenderer.send('win:close'),

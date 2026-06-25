@@ -1,7 +1,15 @@
 'use strict';
 const { app, BrowserWindow, ipcMain, screen, desktopCapturer } = require('electron');
 const path = require('path');
+const os   = require('os');
 const { PROD_SERVER_URL } = require('./config');
+
+// Windows 11 = build 22000+. Acrylic blur only exists there; Win 10 falls back to a solid theme.
+function isWin11() {
+  if (process.platform !== 'win32') return false;
+  const build = parseInt((os.release().split('.')[2]) || '0', 10);
+  return build >= 22000;
+}
 
 let mainWindow       = null;
 let prevBounds       = null;
@@ -49,7 +57,10 @@ function setSplashProgress(p) {
 }
 
 function createWindow() {
-  const isMac = process.platform === 'darwin';
+  const isMac       = process.platform === 'darwin';
+  const win11       = isWin11();
+  const translucent = isMac || win11;   // real OS blur available
+
   mainWindow = new BrowserWindow({
     width: 480,
     height: 600,
@@ -57,17 +68,20 @@ function createWindow() {
     minHeight: 0,
     resizable: false,
     frame: false,
-    // Real translucency so the desktop blurs through (glassmorphism like the reference)
-    backgroundColor: '#00000000',
+    // Win11/macOS: transparent so the desktop blurs through. Win10/older: solid theme background.
+    backgroundColor: translucent ? '#00000000' : '#123a31',
     ...(isMac
       ? { vibrancy: 'under-window', visualEffectState: 'active', transparent: true }
-      : { backgroundMaterial: 'acrylic' }),
+      : win11
+        ? { backgroundMaterial: 'acrylic' }
+        : {}),
     show: false,
     icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      additionalArguments: translucent ? ['--translucent'] : [],
     },
   });
 
