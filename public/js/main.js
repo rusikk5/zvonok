@@ -129,31 +129,77 @@ function escHtml(s) {
 }
 
 // ── Voice sounds ──────────────────────────────────────────────
+// One shared, persistently-unlocked AudioContext. Socket-driven sounds (join/leave/notify)
+// fire WITHOUT a user gesture, so a fresh AudioContext would start 'suspended' and stay silent.
+// We keep one context and resume it on the first user interaction.
+let _sndCtx = null;
 const _audioBufs = {};
+function _getSndCtx() {
+  if (!_sndCtx) {
+    try { _sndCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return null; }
+  }
+  if (_sndCtx.state === 'suspended') _sndCtx.resume().catch(() => {});
+  return _sndCtx;
+}
+// Unlock audio on any interaction: the shared sound context AND the live mic context
+// (if it started suspended, the mic graph would output silence to peers).
+['pointerdown', 'keydown'].forEach(ev =>
+  window.addEventListener(ev, () => {
+    _getSndCtx();
+    const mc = S.voice?._micCtx;
+    if (mc && mc.state === 'suspended') mc.resume().catch(() => {});
+  }, { once: false, passive: true }));
+
 async function _loadSnd(name) {
   if (_audioBufs[name]) return _audioBufs[name];
-  const r = await fetch(`/sounds/${name}.wav`);
+  const ctx = _getSndCtx();
+  if (!ctx) throw new Error('no audio ctx');
+  const r   = await fetch(`/sounds/${name}.wav`);
   const buf = await r.arrayBuffer();
-  const ctx = new AudioContext();
   _audioBufs[name] = await ctx.decodeAudioData(buf);
-  await ctx.close();
   return _audioBufs[name];
 }
-function _playSnd(name) {
+function _playSnd(name, vol = 0.35) {
   _loadSnd(name).then(buf => {
-    const ctx  = new AudioContext();
+    const ctx = _getSndCtx();
+    if (!ctx) return;
     const src  = ctx.createBufferSource();
     const gain = ctx.createGain();
-    gain.gain.value = 0.35;
+    gain.gain.value = vol;
     src.buffer = buf;
     src.connect(gain);
     gain.connect(ctx.destination);
     src.start();
-    src.onended = () => ctx.close();
   }).catch(() => {});
 }
 function playJoinSound()  { _playSnd('join');  }
 function playLeaveSound() { _playSnd('leave'); }
+
+// Short synthesized notification "ding" for incoming messages (no asset needed)
+let _lastNotif = 0;
+function playNotifSound() {
+  const now = Date.now();
+  if (now - _lastNotif < 800) return;   // throttle bursts
+  _lastNotif = now;
+  const ctx = _getSndCtx();
+  if (!ctx) return;
+  try {
+    const t = ctx.currentTime;
+    const g = ctx.createGain();
+    g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    [ [880, 0], [1320, 0.09] ].forEach(([f, dt]) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, t + dt);
+      o.connect(g);
+      o.start(t + dt);
+      o.stop(t + 0.45);
+    });
+  } catch {}
+}
 
 function playRingSound() {
   try {
@@ -257,15 +303,21 @@ function setupSocket() {
   });
 
   S.socket.on('msg', (msg) => {
+    if ((msg.user_id || msg.from_id) !== S.me.id) playNotifSound();
     if (msg.room_id !== S.roomId) return;
     S.messages.push(msg);
     appendMessage(msg, $('messages'));
     scrollEl($('messages'));
   });
 
-  S.socket.on('voice:state', ({ roomId, users }) => {
+  S.socket.on('voice:state', ({ roomId, users, startedAt }) => {
     // Accept for the room we're viewing OR the room we're in voice
     if (roomId !== S.roomId && roomId !== S.voice.roomId) return;
+    // Shared channel timer: everyone counts from when the FIRST participant joined
+    if (typeof startedAt === 'number') {
+      S.voiceStartedAt = startedAt;
+      if (_vcTimerRunning) _vcStartTime = startedAt;
+    }
     S.voiceRoom = users;
     for (const uid of S.voiceUsers.keys()) {
       if (!users.includes(uid)) {
@@ -317,6 +369,7 @@ function setupSocket() {
 
   // DM
   S.socket.on('dm:msg', (msg) => {
+    if (msg.from_id !== S.me.id) playNotifSound();
     S.dmMessages.push(msg);
     // Update DM convos list (refresh last_msg)
     const otherId = msg.from_id === S.me.id ? msg.to_id : msg.from_id;
@@ -749,7 +802,7 @@ let _vcTimerInterval = null, _vcStartTime = 0, _vcTimerRunning = false;
 
 function startVoiceTimer() {
   if (_vcTimerRunning) return;
-  _vcStartTime = Date.now();
+  _vcStartTime = S.voiceStartedAt || Date.now();   // shared start time when known
   _vcTimerRunning = true;
   clearInterval(_vcTimerInterval);
   _vcTimerInterval = setInterval(() => {
@@ -770,6 +823,7 @@ function stopVoiceTimer() {
   clearInterval(_vcTimerInterval);
   _vcTimerInterval = null;
   _vcTimerRunning = false;
+  if (!S.voice.roomId) S.voiceStartedAt = null;   // forget shared start once we've left
   const el = $('vac-timer');
   if (el) el.textContent = '0:00:00';
 }

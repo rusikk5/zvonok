@@ -205,6 +205,9 @@ class VoiceEngine {
     // Without this the context runs at the system rate (often 44.1 kHz) and RNNoise distorts.
     const ctx      = new AudioContext({ sampleRate: 48000 });
     this._micCtx   = ctx;
+    // The context is created after an `await`, so the user-gesture activation may have lapsed
+    // and it can start 'suspended' → the processing graph outputs SILENCE → peers hear nothing.
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const src      = ctx.createMediaStreamSource(rawStream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;

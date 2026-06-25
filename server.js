@@ -602,9 +602,10 @@ app.get('/api/dm/:userId', auth, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════
 // Socket.io
 // ═══════════════════════════════════════════════════════════════════
-const onlineUsers = new Map();
-const voiceRooms  = new Map();
-const userStatus  = new Map();
+const onlineUsers  = new Map();
+const voiceRooms   = new Map();
+const voiceStarted = new Map();   // roomId → timestamp of the first participant joining
+const userStatus   = new Map();
 
 io.use((socket, next) => {
   try {
@@ -690,7 +691,7 @@ io.on('connection', async socket => {
     try {
       if (!await isMember(roomId, uid)) return;
       const room = voiceRooms.get(roomId);
-      socket.emit('voice:state', { roomId, users: room ? [...room.keys()] : [] });
+      socket.emit('voice:state', { roomId, users: room ? [...room.keys()] : [], startedAt: voiceStarted.get(roomId) });
     } catch {}
   });
 
@@ -714,16 +715,16 @@ io.on('connection', async socket => {
 
       if (!voiceRooms.has(roomId)) voiceRooms.set(roomId, new Map());
       const room     = voiceRooms.get(roomId);
+      // First participant → start the shared channel timer
+      if (room.size === 0) voiceStarted.set(roomId, Date.now());
+      const startedAt = voiceStarted.get(roomId);
       const existing = [...room.entries()].map(([userId, socketId]) => ({ userId, socketId }));
       room.set(uid, socket.id);
       socket.join(`voice:${roomId}`);
       socket.emit('voice:init', existing);
       socket.to(`voice:${roomId}`).emit('voice:joined', { userId: uid, socketId: socket.id });
-      if (!roomId.startsWith('dm:')) {
-        io.to(`room:${roomId}`).emit('voice:state', { roomId, users: [...room.keys()] });
-      } else {
-        io.to(`voice:${roomId}`).emit('voice:state', { roomId, users: [...room.keys()] });
-      }
+      const target = roomId.startsWith('dm:') ? `voice:${roomId}` : `room:${roomId}`;
+      io.to(target).emit('voice:state', { roomId, users: [...room.keys()], startedAt });
     } catch {}
   });
 
@@ -767,13 +768,11 @@ function voiceLeave(socket, uid, roomId) {
   if (!room?.has(uid)) return;
   room.delete(uid);
   socket.leave(`voice:${roomId}`);
-  if (room.size === 0) voiceRooms.delete(roomId);
+  if (room.size === 0) { voiceRooms.delete(roomId); voiceStarted.delete(roomId); }
   io.to(`voice:${roomId}`).emit('voice:left', { userId: uid, socketId: socket.id });
-  if (!roomId.startsWith('dm:')) {
-    io.to(`room:${roomId}`).emit('voice:state', { roomId, users: [...(voiceRooms.get(roomId)?.keys() ?? [])] });
-  } else {
-    io.to(`voice:${roomId}`).emit('voice:state', { roomId, users: [...(voiceRooms.get(roomId)?.keys() ?? [])] });
-  }
+  const target    = roomId.startsWith('dm:') ? `voice:${roomId}` : `room:${roomId}`;
+  const startedAt = voiceStarted.get(roomId);
+  io.to(target).emit('voice:state', { roomId, users: [...(voiceRooms.get(roomId)?.keys() ?? [])], startedAt });
 }
 
 // ── Start ──────────────────────────────────────────────────────────
