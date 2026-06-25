@@ -141,13 +141,12 @@ function _getSndCtx() {
   if (_sndCtx.state === 'suspended') _sndCtx.resume().catch(() => {});
   return _sndCtx;
 }
-// Unlock audio on any interaction: the shared sound context AND the live mic context
-// (if it started suspended, the mic graph would output silence to peers).
-['pointerdown', 'keydown'].forEach(ev =>
+// Unlock audio on any interaction: the shared sound context, the live mic context, AND
+// remote <audio> playback (mobile blocks all of these until a user gesture).
+['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
   window.addEventListener(ev, () => {
     _getSndCtx();
-    const mc = S.voice?._micCtx;
-    if (mc && mc.state === 'suspended') mc.resume().catch(() => {});
+    S.voice?.resumeAudio?.();
   }, { once: false, passive: true }));
 
 async function _loadSnd(name) {

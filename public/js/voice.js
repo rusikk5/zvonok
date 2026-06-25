@@ -238,7 +238,10 @@ class VoiceEngine {
 
     // CRITICAL: pin context to 48 kHz — RNNoise's 480-sample frame == 10 ms only at 48 kHz.
     // Without this the context runs at the system rate (often 44.1 kHz) and RNNoise distorts.
-    const ctx      = new AudioContext({ sampleRate: 48000 });
+    // 48 kHz is required by RNNoise, but some phones reject a forced rate — fall back gracefully.
+    let ctx;
+    try { ctx = new AudioContext({ sampleRate: 48000 }); }
+    catch { ctx = new AudioContext(); }
     this._micCtx   = ctx;
     // The context is created after an `await`, so the user-gesture activation may have lapsed
     // and it can start 'suspended' → the processing graph outputs SILENCE → peers hear nothing.
@@ -336,6 +339,7 @@ class VoiceEngine {
   _makePeer(socketId, userId) {
     const pc = new RTCPeerConnection({
       iceServers: VoiceEngine.ICE_SERVERS,
+      iceCandidatePoolSize: 4,
     });
 
     // Deterministic politeness: exactly one side is polite (compares own vs remote socket id)
@@ -414,6 +418,15 @@ class VoiceEngine {
 
     this._emitConnState();
     return pc;
+  }
+
+  // Mobile browsers gate audio behind a user gesture: resume the mic context and (re)start
+  // playback of every remote <audio>. Call this from any tap/keypress.
+  resumeAudio() {
+    if (this._micCtx && this._micCtx.state === 'suspended') this._micCtx.resume().catch(() => {});
+    for (const a of this.audioEls.values()) {
+      try { a.muted = false; a.play().catch(() => {}); } catch {}
+    }
   }
 
   _cleanPeer(socketId) {
